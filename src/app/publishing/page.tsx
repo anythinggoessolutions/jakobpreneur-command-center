@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 interface YouTubeStatus {
@@ -17,6 +17,14 @@ const COMING_SOON_PLATFORMS = [
 ];
 
 export default function PublishingPage() {
+  return (
+    <Suspense fallback={<div className="max-w-4xl mx-auto px-6 py-8 text-zinc-400">Loading...</div>}>
+      <PublishingContent />
+    </Suspense>
+  );
+}
+
+function PublishingContent() {
   const [ytStatus, setYtStatus] = useState<YouTubeStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState(false);
