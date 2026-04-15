@@ -36,6 +36,8 @@ export default function BackgroundsPage() {
   const [filter, setFilter] = useState("All");
   const [showAddModal, setShowAddModal] = useState(false);
   const [playing, setPlaying] = useState<BackgroundVideo | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
 
   const loadVideos = async () => {
     setLoading(true);
@@ -76,6 +78,32 @@ export default function BackgroundsPage() {
     setVideos((prev) => prev.map((v) => (v.id === video.id ? { ...v, timesUsed: v.timesUsed + 1 } : v)));
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const res = await fetch("/api/backgrounds/refresh", { method: "POST" });
+      const data = await res.json();
+      if (data.error) {
+        setRefreshMessage(`Error: ${data.error}`);
+      } else {
+        setRefreshMessage(`Added ${data.added} new videos`);
+        await loadVideos();
+      }
+    } catch (err) {
+      setRefreshMessage(err instanceof Error ? `Error: ${err.message}` : "Error refreshing");
+    } finally {
+      setRefreshing(false);
+      setTimeout(() => setRefreshMessage(null), 5000);
+    }
+  };
+
+  // Stats: how much of the library has been used
+  const usedCount = videos.filter((v) => v.timesUsed > 0).length;
+  const totalCount = videos.length;
+  const allUsed = totalCount > 0 && usedCount === totalCount;
+  const usagePercent = totalCount > 0 ? Math.round((usedCount / totalCount) * 100) : 0;
+
   const playRandom = () => {
     const pool = filter === "All" ? videos : filtered;
     if (pool.length === 0) return;
@@ -96,7 +124,28 @@ export default function BackgroundsPage() {
             Eye-catching videos to play behind you while recording hooks
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Refresh Library — replaces all videos with new ones */}
+          <button
+            onClick={() => {
+              if (refreshing) return;
+              if (confirm("Replace your entire library with a fresh batch of new videos? This will delete all current videos.")) {
+                handleRefresh();
+              }
+            }}
+            disabled={refreshing}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
+              allUsed
+                ? "bg-green-500 hover:bg-green-600 text-white border-green-500 animate-pulse"
+                : "bg-white hover:bg-zinc-50 text-zinc-700 border-zinc-200"
+            } ${refreshing ? "opacity-50 cursor-wait" : ""}`}
+            title={allUsed ? "All videos used — get fresh ones!" : "Replace library with fresh videos"}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {refreshing ? "Searching YouTube..." : "Refresh Library"}
+          </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -107,6 +156,43 @@ export default function BackgroundsPage() {
             Add Video
           </button>
         </div>
+      </div>
+
+      {/* Refresh status banner */}
+      {(refreshMessage || (allUsed && totalCount > 0)) && (
+        <div className={`mb-4 px-4 py-3 rounded-lg border text-sm flex items-center gap-2 ${
+          refreshMessage?.startsWith("Error")
+            ? "bg-red-50 border-red-200 text-red-700"
+            : refreshMessage
+            ? "bg-green-50 border-green-200 text-green-700"
+            : "bg-amber-50 border-amber-200 text-amber-800"
+        }`}>
+          {refreshMessage ? (
+            <>
+              <span className="text-base">{refreshMessage.startsWith("Error") ? "⚠️" : "✓"}</span>
+              <span>{refreshMessage}</span>
+            </>
+          ) : (
+            <>
+              <span className="text-base">🔄</span>
+              <span>You've used all {totalCount} videos. Hit <strong>Refresh Library</strong> to get a fresh batch.</span>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Library usage stats */}
+      <div className="mb-4 flex items-center gap-4 text-xs text-zinc-500">
+        <span><strong className="text-zinc-700">{totalCount}</strong> total</span>
+        <span><strong className="text-zinc-700">{usedCount}</strong> used</span>
+        <span><strong className="text-zinc-700">{totalCount - usedCount}</strong> fresh</span>
+        <div className="flex-1 h-1 bg-zinc-100 rounded-full overflow-hidden max-w-xs">
+          <div
+            className={`h-full transition-all ${usagePercent === 100 ? "bg-amber-400" : "bg-green-500"}`}
+            style={{ width: `${usagePercent}%` }}
+          />
+        </div>
+        <span>{usagePercent}% used</span>
       </div>
 
       {/* Random button */}
