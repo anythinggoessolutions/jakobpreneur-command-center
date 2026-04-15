@@ -3,15 +3,14 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-interface YouTubeStatus {
+interface PlatformStatus {
   connected: boolean;
-  channelName?: string;
-  channelThumbnail?: string;
+  name?: string;
+  thumbnail?: string;
   connectedDate?: string;
 }
 
 const COMING_SOON_PLATFORMS = [
-  { label: "TikTok", icon: "🎵" },
   { label: "Instagram", icon: "📸" },
   { label: "X / Twitter", icon: "𝕏" },
 ];
@@ -25,9 +24,10 @@ export default function PublishingPage() {
 }
 
 function PublishingContent() {
-  const [ytStatus, setYtStatus] = useState<YouTubeStatus | null>(null);
+  const [ytStatus, setYtStatus] = useState<PlatformStatus | null>(null);
+  const [ttStatus, setTtStatus] = useState<PlatformStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   const connectedParam = searchParams.get("connected");
@@ -40,30 +40,48 @@ function PublishingContent() {
   const loadStatus = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/youtube/status");
-      const data = await res.json();
-      setYtStatus(data);
+      const [ytRes, ttRes] = await Promise.all([
+        fetch("/api/auth/youtube/status"),
+        fetch("/api/auth/tiktok/status"),
+      ]);
+      const ytData = await ytRes.json();
+      const ttData = await ttRes.json();
+      setYtStatus({
+        connected: ytData.connected,
+        name: ytData.channelName,
+        thumbnail: ytData.channelThumbnail,
+        connectedDate: ytData.connectedDate,
+      });
+      setTtStatus({
+        connected: ttData.connected,
+        name: ttData.displayName,
+        thumbnail: ttData.avatarUrl,
+        connectedDate: ttData.connectedDate,
+      });
     } catch {
       setYtStatus({ connected: false });
+      setTtStatus({ connected: false });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleConnect = () => {
-    window.location.href = "/api/auth/youtube";
+  const handleConnect = (platform: string) => {
+    window.location.href = `/api/auth/${platform}`;
   };
 
-  const handleDisconnect = async () => {
-    if (!confirm("Disconnect YouTube? You'll need to re-authorize to post videos.")) return;
-    setDisconnecting(true);
+  const handleDisconnect = async (platform: string) => {
+    const label = platform === "youtube" ? "YouTube" : "TikTok";
+    if (!confirm(`Disconnect ${label}? You'll need to re-authorize to post.`)) return;
+    setDisconnecting(platform);
     try {
-      await fetch("/api/auth/youtube/disconnect", { method: "POST" });
-      setYtStatus({ connected: false });
+      await fetch(`/api/auth/${platform}/disconnect`, { method: "POST" });
+      if (platform === "youtube") setYtStatus({ connected: false });
+      if (platform === "tiktok") setTtStatus({ connected: false });
     } catch {
       // ignore
     } finally {
-      setDisconnecting(false);
+      setDisconnecting(null);
     }
   };
 
@@ -77,10 +95,10 @@ function PublishingContent() {
       </div>
 
       {/* Success / Error banners */}
-      {connectedParam === "youtube" && (
+      {connectedParam && (
         <div className="mb-6 px-4 py-3 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm flex items-center gap-2">
           <span className="text-base">✓</span>
-          <span>YouTube connected successfully!</span>
+          <span>{connectedParam === "youtube" ? "YouTube" : "TikTok"} connected successfully!</span>
         </div>
       )}
       {errorParam && (
@@ -90,85 +108,43 @@ function PublishingContent() {
         </div>
       )}
 
-      {/* Platform cards */}
       <div className="space-y-4">
-        {/* YouTube — full OAuth integration */}
-        <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-          <div className="px-6 py-5 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-100 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                </svg>
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-zinc-900">YouTube</h3>
-                {loading ? (
-                  <p className="text-sm text-zinc-400">Checking connection...</p>
-                ) : ytStatus?.connected ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-sm text-green-700 font-medium">Connected</span>
-                    <span className="text-sm text-zinc-400">—</span>
-                    <span className="text-sm text-zinc-600">{ytStatus.channelName}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-zinc-300" />
-                    <span className="text-sm text-zinc-500">Not connected</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div>
-              {loading ? (
-                <div className="w-28 h-9 bg-zinc-100 animate-pulse rounded-lg" />
-              ) : ytStatus?.connected ? (
-                <button
-                  onClick={handleDisconnect}
-                  disabled={disconnecting}
-                  className="px-4 py-2 bg-white hover:bg-red-50 text-red-500 border border-red-200 text-sm font-medium rounded-lg transition-colors cursor-pointer"
-                >
-                  {disconnecting ? "Disconnecting..." : "Disconnect"}
-                </button>
-              ) : (
-                <button
-                  onClick={handleConnect}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer"
-                >
-                  Connect YouTube
-                </button>
-              )}
-            </div>
-          </div>
+        {/* YouTube */}
+        <PlatformCard
+          label="YouTube"
+          icon={
+            <svg className="w-6 h-6 text-red-600" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.546 12 3.546 12 3.546s-7.505 0-9.377.504A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.504 9.376.504 9.376.504s7.505 0 9.377-.504a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+          }
+          iconBg="bg-red-50 border-red-100"
+          buttonColor="bg-red-600 hover:bg-red-700"
+          status={ytStatus}
+          loading={loading}
+          disconnecting={disconnecting === "youtube"}
+          onConnect={() => handleConnect("youtube")}
+          onDisconnect={() => handleDisconnect("youtube")}
+        />
 
-          {/* Channel details when connected */}
-          {ytStatus?.connected && (
-            <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex items-center gap-4">
-              {ytStatus.channelThumbnail && (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img
-                  src={ytStatus.channelThumbnail}
-                  alt={ytStatus.channelName || "Channel"}
-                  className="w-10 h-10 rounded-full border border-zinc-200"
-                />
-              )}
-              <div className="text-sm">
-                <p className="text-zinc-700 font-medium">{ytStatus.channelName}</p>
-                <p className="text-zinc-400 text-xs">
-                  Connected {ytStatus.connectedDate || "recently"}
-                </p>
-              </div>
-              <div className="ml-auto">
-                <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
-                  Ready to publish
-                </span>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* TikTok */}
+        <PlatformCard
+          label="TikTok"
+          icon={
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.73a8.19 8.19 0 004.76 1.52v-3.4a4.85 4.85 0 01-1-.16z"/>
+            </svg>
+          }
+          iconBg="bg-zinc-900 border-zinc-800"
+          iconTextColor="text-white"
+          buttonColor="bg-zinc-900 hover:bg-zinc-800"
+          status={ttStatus}
+          loading={loading}
+          disconnecting={disconnecting === "tiktok"}
+          onConnect={() => handleConnect("tiktok")}
+          onDisconnect={() => handleDisconnect("tiktok")}
+        />
 
-        {/* Other platforms — Coming Soon */}
+        {/* Coming Soon platforms */}
         {COMING_SOON_PLATFORMS.map((p) => (
           <div key={p.label} className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
             <div className="px-6 py-5 flex items-center justify-between">
@@ -184,10 +160,7 @@ function PublishingContent() {
                   </div>
                 </div>
               </div>
-              <button
-                disabled
-                className="px-4 py-2 bg-zinc-100 text-zinc-400 text-sm font-medium rounded-lg cursor-not-allowed"
-              >
+              <button disabled className="px-4 py-2 bg-zinc-100 text-zinc-400 text-sm font-medium rounded-lg cursor-not-allowed">
                 Coming Soon
               </button>
             </div>
@@ -205,6 +178,91 @@ function PublishingContent() {
           <p>4. <strong>Make.com</strong> handles the actual posting on schedule</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlatformCard({
+  label, icon, iconBg, iconTextColor, buttonColor, status, loading, disconnecting, onConnect, onDisconnect,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  iconBg: string;
+  iconTextColor?: string;
+  buttonColor: string;
+  status: PlatformStatus | null;
+  loading: boolean;
+  disconnecting: boolean;
+  onConnect: () => void;
+  onDisconnect: () => void;
+}) {
+  return (
+    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+      <div className="px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${iconBg} ${iconTextColor || ""}`}>
+            {icon}
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-zinc-900">{label}</h3>
+            {loading ? (
+              <p className="text-sm text-zinc-400">Checking connection...</p>
+            ) : status?.connected ? (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500" />
+                <span className="text-sm text-green-700 font-medium">Connected</span>
+                {status.name && (
+                  <>
+                    <span className="text-sm text-zinc-400">—</span>
+                    <span className="text-sm text-zinc-600">{status.name}</span>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-zinc-300" />
+                <span className="text-sm text-zinc-500">Not connected</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <div>
+          {loading ? (
+            <div className="w-28 h-9 bg-zinc-100 animate-pulse rounded-lg" />
+          ) : status?.connected ? (
+            <button
+              onClick={onDisconnect}
+              disabled={disconnecting}
+              className="px-4 py-2 bg-white hover:bg-red-50 text-red-500 border border-red-200 text-sm font-medium rounded-lg transition-colors cursor-pointer"
+            >
+              {disconnecting ? "Disconnecting..." : "Disconnect"}
+            </button>
+          ) : (
+            <button
+              onClick={onConnect}
+              className={`px-4 py-2 ${buttonColor} text-white text-sm font-semibold rounded-lg transition-colors cursor-pointer`}
+            >
+              Connect {label}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {status?.connected && (
+        <div className="px-6 py-4 border-t border-zinc-100 bg-zinc-50 flex items-center gap-4">
+          {status.thumbnail && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={status.thumbnail} alt={status.name || label} className="w-10 h-10 rounded-full border border-zinc-200" />
+          )}
+          <div className="text-sm">
+            <p className="text-zinc-700 font-medium">{status.name}</p>
+            <p className="text-zinc-400 text-xs">Connected {status.connectedDate || "recently"}</p>
+          </div>
+          <div className="ml-auto">
+            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">Ready to publish</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
