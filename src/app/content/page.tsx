@@ -6,6 +6,7 @@ import TweetPreview from "@/components/TweetPreview";
 import QueueItem from "@/components/QueueItem";
 import RejectModal from "@/components/RejectModal";
 import AddToolModal from "@/components/AddToolModal";
+import VideoDropZone from "@/components/VideoDropZone";
 import { mockQueue } from "@/lib/mock-data";
 import { QueuedTool } from "@/lib/types";
 
@@ -202,6 +203,14 @@ export default function ContentPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Video Drop Zone */}
+      <div className="mt-8">
+        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
+          Upload Recorded Videos
+        </h2>
+        <VideoDropZone />
       </div>
 
       {/* Modals */}
