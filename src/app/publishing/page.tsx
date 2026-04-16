@@ -10,9 +10,7 @@ interface PlatformStatus {
   connectedDate?: string;
 }
 
-const COMING_SOON_PLATFORMS = [
-  { label: "X / Twitter", icon: "𝕏" },
-];
+const COMING_SOON_PLATFORMS: { label: string; icon: string }[] = [];
 
 export default function PublishingPage() {
   return (
@@ -26,6 +24,7 @@ function PublishingContent() {
   const [ytStatus, setYtStatus] = useState<PlatformStatus | null>(null);
   const [ttStatus, setTtStatus] = useState<PlatformStatus | null>(null);
   const [igStatus, setIgStatus] = useState<PlatformStatus | null>(null);
+  const [xStatus, setXStatus] = useState<PlatformStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [scheduledVideos, setScheduledVideos] = useState<{id: string; toolName: string; partNumber: number; status: string; scheduledDate: string; platforms: string[]}[]>([]);
@@ -42,14 +41,16 @@ function PublishingContent() {
   const loadStatus = async () => {
     setLoading(true);
     try {
-      const [ytRes, ttRes, igRes] = await Promise.all([
+      const [ytRes, ttRes, igRes, xRes] = await Promise.all([
         fetch("/api/auth/youtube/status"),
         fetch("/api/auth/tiktok/status"),
         fetch("/api/auth/instagram/status"),
+        fetch("/api/auth/twitter/status"),
       ]);
       const ytData = await ytRes.json();
       const ttData = await ttRes.json();
       const igData = await igRes.json();
+      const xData = await xRes.json();
       setYtStatus({
         connected: ytData.connected,
         name: ytData.channelName,
@@ -68,10 +69,17 @@ function PublishingContent() {
         thumbnail: igData.profilePicture,
         connectedDate: igData.connectedDate,
       });
+      setXStatus({
+        connected: xData.connected,
+        name: xData.username,
+        thumbnail: xData.profileImage,
+        connectedDate: xData.connectedDate,
+      });
     } catch {
       setYtStatus({ connected: false });
       setTtStatus({ connected: false });
       setIgStatus({ connected: false });
+      setXStatus({ connected: false });
     } finally {
       setLoading(false);
     }
@@ -100,6 +108,7 @@ function PublishingContent() {
       if (platform === "youtube") setYtStatus({ connected: false });
       if (platform === "tiktok") setTtStatus({ connected: false });
       if (platform === "instagram") setIgStatus({ connected: false });
+      if (platform === "twitter") setXStatus({ connected: false });
     } catch {
       // ignore
     } finally {
@@ -190,6 +199,20 @@ function PublishingContent() {
           disconnecting={disconnecting === "instagram"}
           onConnect={() => handleConnect("instagram")}
           onDisconnect={() => handleDisconnect("instagram")}
+        />
+
+        {/* X / Twitter */}
+        <PlatformCard
+          label="X"
+          icon={<span className="text-xl font-bold">𝕏</span>}
+          iconBg="bg-zinc-900 border-zinc-800"
+          iconTextColor="text-white"
+          buttonColor="bg-zinc-900 hover:bg-zinc-800"
+          status={xStatus}
+          loading={loading}
+          disconnecting={disconnecting === "twitter"}
+          onConnect={() => handleConnect("twitter")}
+          onDisconnect={() => handleDisconnect("twitter")}
         />
 
         {/* Coming Soon platforms */}
