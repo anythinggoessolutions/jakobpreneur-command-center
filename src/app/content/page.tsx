@@ -202,15 +202,15 @@ export default function ContentPage() {
               Target: 20+ tools ready
             </p>
           </div>
-        </div>
-      </div>
 
-      {/* Video Drop Zone */}
-      <div className="mt-8">
-        <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
-          Upload Recorded Videos
-        </h2>
-        <VideoDropZone />
+          {/* Video Drop Zone */}
+          <div className="mt-4">
+            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
+              Upload Recorded Videos
+            </h2>
+            <VideoDropZone />
+          </div>
+        </div>
       </div>
 
       {/* Modals */}
