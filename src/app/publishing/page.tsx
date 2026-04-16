@@ -28,6 +28,7 @@ function PublishingContent() {
   const [igStatus, setIgStatus] = useState<PlatformStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [scheduledVideos, setScheduledVideos] = useState<{id: string; toolName: string; partNumber: number; status: string; scheduledDate: string; platforms: string[]}[]>([]);
   const searchParams = useSearchParams();
 
   const connectedParam = searchParams.get("connected");
@@ -35,6 +36,7 @@ function PublishingContent() {
 
   useEffect(() => {
     loadStatus();
+    loadSchedule();
   }, []);
 
   const loadStatus = async () => {
@@ -72,6 +74,16 @@ function PublishingContent() {
       setIgStatus({ connected: false });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSchedule = async () => {
+    try {
+      const res = await fetch("/api/schedule");
+      const data = await res.json();
+      if (data.videos) setScheduledVideos(data.videos);
+    } catch {
+      // ignore
     }
   };
 
@@ -202,6 +214,50 @@ function PublishingContent() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Scheduled Queue */}
+      <div className="mt-10">
+        <h2 className="text-lg font-bold text-zinc-900 mb-1">Publishing Queue</h2>
+        <p className="text-sm text-zinc-500 mb-4">
+          Videos auto-schedule to the next available slot (9am, 1pm, or 7pm EST, max 3/day).
+        </p>
+
+        {scheduledVideos.length === 0 ? (
+          <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-8 text-center">
+            <p className="text-zinc-400 text-sm">No videos scheduled yet. Record a video from the Content tab and hit Complete.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {scheduledVideos.map((v, i) => {
+              const dateObj = v.scheduledDate ? new Date(v.scheduledDate + "T12:00:00") : null;
+              const dateLabel = dateObj ? dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "Unscheduled";
+              const statusColors: Record<string, string> = {
+                scheduled: "bg-blue-100 text-blue-700",
+                posted: "bg-green-100 text-green-700",
+                failed: "bg-red-100 text-red-700",
+                recorded: "bg-amber-100 text-amber-700",
+              };
+              return (
+                <div key={v.id} className="bg-white rounded-lg border border-zinc-200 px-4 py-3 flex items-center gap-4">
+                  <div className="text-zinc-300 font-mono text-sm w-6 text-center shrink-0">{i + 1}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-zinc-900">{v.toolName}</span>
+                      {v.partNumber > 0 && <span className="text-xs text-zinc-400">Pt. {v.partNumber}</span>}
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-0.5">
+                      {dateLabel} &middot; {(v.platforms || []).join(", ")}
+                    </div>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColors[v.status] || "bg-zinc-100 text-zinc-600"}`}>
+                    {v.status}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Setup info */}

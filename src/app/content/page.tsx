@@ -65,7 +65,26 @@ export default function ContentPage() {
     setShowAddModal(false);
   };
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    const tool = currentItem.tool;
+    // Schedule the video via API
+    try {
+      const res = await fetch("/api/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toolName: tool.name,
+          partNumber: tool.partNumber,
+          themeTag: tool.category,
+        }),
+      });
+      const data = await res.json();
+      if (data.scheduledDate) {
+        console.log(`Scheduled ${tool.name} for ${data.scheduledDate} at ${data.scheduledTime}`);
+      }
+    } catch (err) {
+      console.error("Failed to schedule:", err);
+    }
     setCompletedCount((c) => c + 1);
     if (currentIndex < queue.length - 1) {
       setCurrentIndex((i) => i + 1);
