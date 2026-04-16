@@ -36,7 +36,14 @@ function PublishingContent() {
   useEffect(() => {
     loadStatus();
     loadSchedule();
-  }, []);
+    // Clear URL params after 3 seconds so error/success banners don't persist on refresh
+    if (connectedParam || errorParam) {
+      const timer = setTimeout(() => {
+        window.history.replaceState({}, "", "/publishing");
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [connectedParam, errorParam]);
 
   const loadStatus = async () => {
     setLoading(true);
