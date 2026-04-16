@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listRecords } from "@/lib/airtable";
+import { getValidYouTubeToken } from "@/lib/google-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -145,9 +146,15 @@ export async function GET() {
       if (platform === "Instagram" && token) {
         const stats = await fetchInstagramStats(token);
         results.push({ ...base, ...stats });
-      } else if (platform === "YouTube" && token) {
-        const stats = await fetchYouTubeStats(token);
-        results.push({ ...base, ...stats });
+      } else if (platform === "YouTube") {
+        // Auto-refresh YouTube token if expired
+        try {
+          const freshToken = await getValidYouTubeToken();
+          const stats = await fetchYouTubeStats(freshToken);
+          results.push({ ...base, ...stats });
+        } catch (err) {
+          results.push({ ...base, error: err instanceof Error ? err.message : String(err) });
+        }
       } else if (platform === "X") {
         const stats = await fetchXStats();
         results.push({ ...base, ...stats });
