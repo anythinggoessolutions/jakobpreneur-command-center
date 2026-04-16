@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listRecords } from "@/lib/airtable";
 import { getValidYouTubeToken } from "@/lib/google-oauth";
+import { twitterApiRequest } from "@/lib/twitter-api";
 
 export const dynamic = "force-dynamic";
 
@@ -74,27 +75,9 @@ async function fetchYouTubeStats(accessToken: string): Promise<Partial<PlatformS
 }
 
 async function fetchXStats(): Promise<Partial<PlatformStats>> {
-  // Use OAuth 1.0a tokens from env to get user stats
-  const consumerKey = process.env.TWITTER_CONSUMER_KEY;
-  const consumerSecret = process.env.TWITTER_CONSUMER_SECRET;
-  const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-  const accessTokenSecret = process.env.TWITTER_ACCESS_TOKEN_SECRET;
-
-  if (!consumerKey || !consumerSecret || !accessToken || !accessTokenSecret) {
-    return { error: "X API tokens not configured" };
-  }
-
   try {
-    // Use Bearer token for read-only access (simpler than OAuth 1.0a signing)
-    const bearerToken = process.env.TWITTER_BEARER_TOKEN;
-    if (!bearerToken) return { error: "Bearer token not set" };
-
-    const decodedBearer = decodeURIComponent(bearerToken);
-
-    // Get authenticated user info
-    const res = await fetch(
-      "https://api.twitter.com/2/users/me?user.fields=public_metrics,profile_image_url",
-      { headers: { Authorization: `Bearer ${decodedBearer}` } }
+    const res = await twitterApiRequest(
+      "https://api.twitter.com/2/users/me?user.fields=public_metrics,profile_image_url"
     );
 
     if (!res.ok) {
