@@ -1,17 +1,17 @@
 /**
- * Instagram/Meta OAuth 2.0 helpers — raw HTTP, no SDKs.
- * Instagram publishing goes through Facebook's OAuth + Graph API.
+ * Instagram Business Login OAuth 2.0 helpers — raw HTTP, no SDKs.
+ * Uses the new Instagram Business Login API (not the old Facebook-based flow).
  */
 
-const FB_AUTH_URL = "https://www.facebook.com/v21.0/dialog/oauth";
-const FB_TOKEN_URL = "https://graph.facebook.com/v21.0/oauth/access_token";
-const GRAPH_API = "https://graph.facebook.com/v21.0";
+// Instagram Business Login (new API)
+const IG_AUTH_URL = "https://www.instagram.com/oauth/authorize";
+const IG_TOKEN_URL = "https://api.instagram.com/oauth/access_token";
+const IG_GRAPH_API = "https://graph.instagram.com";
 
 const SCOPES = [
-  "instagram_basic",
-  "instagram_content_publish",
-  "pages_read_engagement",
-  "pages_show_list",
+  "instagram_business_basic",
+  "instagram_business_content_publish",
+  "instagram_business_manage_insights",
 ].join(",");
 
 function getCredentials() {
@@ -37,93 +37,72 @@ export function buildInstagramAuthUrl(redirectUri: string): string {
     response_type: "code",
     state: Math.random().toString(36).substring(2),
   });
-  return `${FB_AUTH_URL}?${params.toString()}`;
+  return `${IG_AUTH_URL}?${params.toString()}`;
 }
 
 export async function exchangeInstagramCode(code: string, redirectUri: string) {
   const { appId, appSecret } = getCredentials();
 
   // Exchange code for short-lived token
-  const params = new URLSearchParams({
-    client_id: appId,
-    client_secret: appSecret,
-    redirect_uri: redirectUri,
-    code,
+  const res = await fetch(IG_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: appId,
+      client_secret: appSecret,
+      grant_type: "authorization_code",
+      redirect_uri: redirectUri,
+      code,
+    }),
   });
 
-  const res = await fetch(`${FB_TOKEN_URL}?${params.toString()}`);
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Meta token exchange failed (${res.status}): ${err}`);
+    throw new Error(`Instagram token exchange failed (${res.status}): ${err}`);
   }
 
   const data = await res.json();
   const shortToken = data.access_token;
+  const userId = data.user_id;
 
   // Exchange for long-lived token (60 days)
-  const longRes = await fetch(
-    `${FB_TOKEN_URL}?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortToken}`
-  );
+  try {
+    const longRes = await fetch(
+      `${IG_GRAPH_API}/access_token?grant_type=ig_exchange_token&client_secret=${appSecret}&access_token=${shortToken}`
+    );
 
-  if (!longRes.ok) {
+    if (longRes.ok) {
+      const longData = await longRes.json();
+      return {
+        accessToken: longData.access_token || shortToken,
+        expiresIn: longData.expires_in || 5184000,
+        userId: String(userId),
+      };
+    }
+  } catch {
     // Fall back to short-lived token
-    return { accessToken: shortToken, expiresIn: data.expires_in || 3600 };
   }
 
-  const longData = await longRes.json();
-  return {
-    accessToken: longData.access_token || shortToken,
-    expiresIn: longData.expires_in || 5184000, // 60 days
-  };
+  return { accessToken: shortToken, expiresIn: 3600, userId: String(userId) };
 }
 
 /**
- * Get the Instagram Business Account ID connected to the user's Facebook Pages.
+ * Fetch the authenticated user's Instagram profile info.
  */
-export async function fetchInstagramAccount(accessToken: string) {
-  // 1. Get user's Facebook Pages
-  const pagesRes = await fetch(
-    `${GRAPH_API}/me/accounts?fields=id,name,instagram_business_account&access_token=${accessToken}`
+export async function fetchInstagramProfile(accessToken: string) {
+  const res = await fetch(
+    `${IG_GRAPH_API}/me?fields=user_id,username,profile_picture_url,name&access_token=${accessToken}`
   );
 
-  if (!pagesRes.ok) {
-    const err = await pagesRes.text();
-    throw new Error(`Failed to fetch Pages (${pagesRes.status}): ${err}`);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Instagram profile fetch failed (${res.status}): ${err}`);
   }
 
-  const pagesData = await pagesRes.json();
-  const pages = pagesData.data || [];
-
-  // 2. Find a page with an Instagram Business Account
-  const pageWithIG = pages.find(
-    (p: { instagram_business_account?: { id: string } }) => p.instagram_business_account
-  );
-
-  if (!pageWithIG || !pageWithIG.instagram_business_account) {
-    throw new Error(
-      "No Instagram Business account found. Make sure your Instagram is a Business/Creator account linked to a Facebook Page."
-    );
-  }
-
-  const igAccountId = pageWithIG.instagram_business_account.id;
-
-  // 3. Get Instagram account info
-  const igRes = await fetch(
-    `${GRAPH_API}/${igAccountId}?fields=id,username,profile_picture_url,name&access_token=${accessToken}`
-  );
-
-  if (!igRes.ok) {
-    const err = await igRes.text();
-    throw new Error(`Failed to fetch IG info (${igRes.status}): ${err}`);
-  }
-
-  const igData = await igRes.json();
-
+  const data = await res.json();
   return {
-    igAccountId: igData.id,
-    username: igData.username || igData.name || "Instagram User",
-    profilePicture: igData.profile_picture_url || "",
-    pageId: pageWithIG.id,
-    pageName: pageWithIG.name,
+    userId: data.user_id || data.id,
+    username: data.username || data.name || "Instagram User",
+    profilePicture: data.profile_picture_url || "",
   };
 }

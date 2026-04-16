@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exchangeInstagramCode, fetchInstagramAccount, getInstagramRedirectUri } from "@/lib/instagram-oauth";
+import { exchangeInstagramCode, fetchInstagramProfile, getInstagramRedirectUri } from "@/lib/instagram-oauth";
 import { listRecords, createRecord, updateRecord } from "@/lib/airtable";
 
 export const dynamic = "force-dynamic";
@@ -32,15 +32,15 @@ export async function GET(req: NextRequest) {
     const redirectUri = getInstagramRedirectUri(req.url);
     const tokens = await exchangeInstagramCode(code, redirectUri);
 
-    // Fetch Instagram account info
+    // Fetch profile info
     let username = "Instagram User";
     let profilePicture = "";
     try {
-      const ig = await fetchInstagramAccount(tokens.accessToken);
-      username = ig.username;
-      profilePicture = ig.profilePicture;
+      const profile = await fetchInstagramProfile(tokens.accessToken);
+      username = profile.username;
+      profilePicture = profile.profilePicture;
     } catch {
-      // Continue even if account fetch fails
+      // Continue even if profile fetch fails
     }
 
     const expiryDate = new Date(Date.now() + tokens.expiresIn * 1000).toISOString();
