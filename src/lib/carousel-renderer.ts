@@ -186,24 +186,27 @@ function renderFinalSlide(
     90
   );
 
-  // Big closing message centered
-  ctx.fillStyle = FG;
-  ctx.font = "bold 90px Helvetica";
+  // Big closing message centered — auto-sized based on line count
   const lines = closingText.split("\n");
-  const totalH = lines.length * 100;
-  const startY = HEIGHT / 2 - totalH / 2 - 100;
+  // Scale font based on lines so text always fits nicely
+  const fontSize = lines.length <= 3 ? 90 : lines.length <= 5 ? 74 : 64;
+  const lineHeight = Math.round(fontSize * 1.15);
+  ctx.fillStyle = FG;
+  ctx.font = `bold ${fontSize}px Helvetica`;
+  const totalH = lines.length * lineHeight;
+  const blockStartY = 180;
   lines.forEach((line, i) => {
     const w = ctx.measureText(line).width;
-    ctx.fillText(line, (WIDTH - w) / 2, startY + i * 100);
+    ctx.fillText(line, (WIDTH - w) / 2, blockStartY + i * lineHeight);
   });
 
-  // Follow CTA in green pill
+  // Follow CTA in green pill — placed below the text block
   const cta = "FOLLOW @JAKOBPRENEUR";
   ctx.font = "bold 54px Helvetica";
   const ctaW = ctx.measureText(cta).width + 80;
   const ctaH = 110;
   const ctaX = (WIDTH - ctaW) / 2;
-  const ctaY = HEIGHT / 2 + 100;
+  const ctaY = Math.max(blockStartY + totalH + 80, HEIGHT - 340);
   ctx.fillStyle = GREEN;
   const r = 55;
   ctx.beginPath();
@@ -252,11 +255,22 @@ export function renderCarousel(spec: CarouselSpec): Buffer[] {
     images.push(renderContentSlide(i + 2, totalPages, step_labels[i] || `STEP ${i + 1}`, cleaned));
   }
 
-  // Final slide
+  // Final slide — rotating motivational closers (jakobpreneur voice)
+  const MOTIVATIONAL_CLOSERS = [
+    "MILLIONS OF PEOPLE\nTAKE ACTION EVERY DAY.\nWHY NOT YOU?",
+    "YOU HAVE\nTHE TOOLS.\nYOU HAVE\nTHE TIME.\nWHAT ELSE\nDO YOU NEED?",
+    "EVERY EXPERT\nWAS ONCE\nA BEGINNER\nWHO REFUSED\nTO QUIT.",
+    "THE GAP BETWEEN\nDREAMING AND DOING\nIS ONE DECISION.\nMAKE IT TODAY.",
+    "SOMEONE LESS\nQUALIFIED THAN YOU\nIS DOING IT RIGHT NOW.\nGO GET YOURS.",
+    "STOP CONSUMING.\nSTART CREATING.\nTHE WORLD\nIS WAITING.",
+    "YOU DON'T NEED\nANOTHER COURSE.\nYOU NEED\nONE HOUR\nOF DOING.",
+    "THE BEST TIME\nTO START\nWAS YESTERDAY.\nTHE SECOND BEST\nIS NOW.",
+    "OPPORTUNITY\nSHOWS UP\nDISGUISED AS WORK.\nSHOW UP ANYWAY.",
+    "EVERY SCROLL\nIS A CHOICE\nTO STAY WHERE\nYOU ARE.\nCHOOSE DIFFERENTLY.",
+  ];
   const closing =
-    spec.carouselType === "famous_person"
-      ? "IF THEY CAN DO IT,\nYOU CAN TOO."
-      : `${spec.toolName?.toUpperCase() || "TRY IT"}\nTODAY.`;
+    spec.closingText ||
+    MOTIVATIONAL_CLOSERS[Math.floor(Math.random() * MOTIVATIONAL_CLOSERS.length)];
   images.push(renderFinalSlide(totalPages, closing));
 
   return images;
