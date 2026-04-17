@@ -167,12 +167,29 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
   };
 
   const handleStopServer = async () => {
-    if (!confirm("Stop the video pipeline server?")) return;
+    if (!confirm("Stop the video pipeline server? LaunchAgent will auto-restart it.")) return;
     try {
       await fetch(`${PIPELINE_URL}/shutdown`, { method: "POST" });
       setTimeout(() => checkServerStatus(), 1000);
     } catch {
       // ignore
+    }
+  };
+
+  const handleRestartServer = async () => {
+    try {
+      // Trigger shutdown — LaunchAgent will auto-restart in ~10s
+      await fetch(`${PIPELINE_URL}/shutdown`, { method: "POST" });
+    } catch {
+      // ignore — server might already be down
+    }
+    // Poll until it comes back online
+    setServerStatus("unknown");
+    const maxTries = 20;
+    for (let i = 0; i < maxTries; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const up = await checkServerStatus();
+      if (up) break;
     }
   };
 
@@ -184,7 +201,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
 
   const [publishing, setPublishing] = useState(false);
   const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string }> | null>(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x"]));
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram"]));
 
   const togglePlatform = (p: string) => {
     setSelectedPlatforms((prev) => {
@@ -263,18 +280,34 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
           </span>
         </div>
         {serverStatus === "running" && (
-          <button
-            onClick={handleStopServer}
-            className="text-red-500 hover:text-red-600 font-semibold cursor-pointer"
-            title="Stop the local pipeline server"
-          >
-            Stop Server
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleRestartServer}
+              className="text-zinc-600 hover:text-zinc-900 font-semibold cursor-pointer"
+              title="Restart the server (LaunchAgent auto-restarts after shutdown)"
+            >
+              Restart
+            </button>
+            <button
+              onClick={handleStopServer}
+              className="text-red-500 hover:text-red-600 font-semibold cursor-pointer"
+              title="Stop the local pipeline server"
+            >
+              Stop
+            </button>
+          </div>
         )}
         {serverStatus === "stopped" && (
-          <code className="text-[10px] bg-zinc-900 text-white px-1.5 py-0.5 rounded">
-            ./pipeline/start.sh
-          </code>
+          <button
+            onClick={handleRestartServer}
+            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white text-[11px] font-semibold px-2 py-1 rounded cursor-pointer"
+            title="Restart the server (takes ~15 seconds)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Restart Server
+          </button>
         )}
       </div>
 
@@ -336,7 +369,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                 {[
                   { key: "youtube", label: "YouTube", color: "red" },
                   { key: "x", label: "X (Tweets)", color: "zinc" },
-                  { key: "instagram", label: "Instagram", color: "purple", note: "manual" },
+                  { key: "instagram", label: "Instagram Reels", color: "purple" },
                 ].map((p) => (
                   <button
                     key={p.key}
@@ -347,7 +380,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                         : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
                     }`}
                   >
-                    {p.label}{p.note ? ` (${p.note})` : ""}
+                    {p.label}
                   </button>
                 ))}
               </div>
