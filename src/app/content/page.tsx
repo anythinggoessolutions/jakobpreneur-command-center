@@ -7,6 +7,7 @@ import QueueItem from "@/components/QueueItem";
 import RejectModal from "@/components/RejectModal";
 import AddToolModal from "@/components/AddToolModal";
 import VideoDropZone from "@/components/VideoDropZone";
+import SocialCaptions from "@/components/SocialCaptions";
 import { mockQueue } from "@/lib/mock-data";
 import { QueuedTool } from "@/lib/types";
 
@@ -164,6 +165,7 @@ export default function ContentPage() {
             />
           </div>
 
+          <SocialCaptions item={currentItem} />
           <TweetPreview tweets={currentItem.tweets} />
         </div>
 
@@ -208,7 +210,13 @@ export default function ContentPage() {
             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
               Upload Recorded Videos
             </h2>
-            <VideoDropZone />
+            <VideoDropZone
+              seriesText={
+                currentItem.script.hookType === "B"
+                  ? `AI TOOLS YOU NEED TO KNOW. PART ${currentItem.tool.partNumber}.`
+                  : undefined
+              }
+            />
           </div>
         </div>
       </div>

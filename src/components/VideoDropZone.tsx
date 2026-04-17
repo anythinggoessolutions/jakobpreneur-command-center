@@ -60,7 +60,11 @@ function detectMode(files: DroppedFile[]): string {
   return "mode-1";
 }
 
-export default function VideoDropZone() {
+interface VideoDropZoneProps {
+  seriesText?: string;
+}
+
+export default function VideoDropZone({ seriesText }: VideoDropZoneProps = {}) {
   const [files, setFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [serverStatus, setServerStatus] = useState<"unknown" | "running" | "stopped">("unknown");
@@ -138,6 +142,7 @@ export default function VideoDropZone() {
 
     const formData = new FormData();
     files.forEach((f) => formData.append("files", f.file));
+    if (seriesText) formData.append("series_text", seriesText);
 
     try {
       const res = await fetch(`${PIPELINE_URL}/process`, { method: "POST", body: formData });
