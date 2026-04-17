@@ -3,6 +3,7 @@ import { put } from "@vercel/blob";
 import { renderCarousel } from "@/lib/carousel-renderer";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
