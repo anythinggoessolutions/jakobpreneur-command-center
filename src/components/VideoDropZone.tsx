@@ -60,11 +60,20 @@ function detectMode(files: DroppedFile[]): string {
   return "mode-1";
 }
 
-interface VideoDropZoneProps {
-  seriesText?: string;
+interface PublishPayload {
+  title: string;
+  youtubeDescription: string;
+  instagramCaption: string;
+  tiktokCaption: string;
+  tweets: string[];
 }
 
-export default function VideoDropZone({ seriesText }: VideoDropZoneProps = {}) {
+interface VideoDropZoneProps {
+  seriesText?: string;
+  publishPayload?: PublishPayload;
+}
+
+export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZoneProps = {}) {
   const [files, setFiles] = useState<DroppedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [serverStatus, setServerStatus] = useState<"unknown" | "running" | "stopped">("unknown");
@@ -173,6 +182,43 @@ export default function VideoDropZone({ seriesText }: VideoDropZoneProps = {}) {
     }
   };
 
+  const [publishing, setPublishing] = useState(false);
+  const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string }> | null>(null);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x"]));
+
+  const togglePlatform = (p: string) => {
+    setSelectedPlatforms((prev) => {
+      const next = new Set(prev);
+      if (next.has(p)) next.delete(p);
+      else next.add(p);
+      return next;
+    });
+  };
+
+  const handlePublish = async () => {
+    if (!currentJob?.id || !publishPayload) return;
+    if (!confirm(`Publish to ${Array.from(selectedPlatforms).join(", ")}? This is LIVE and cannot be undone.`)) return;
+    setPublishing(true);
+    try {
+      const formData = new FormData();
+      formData.append("job_id", currentJob.id);
+      formData.append("title", publishPayload.title);
+      formData.append("youtube_description", publishPayload.youtubeDescription);
+      formData.append("instagram_caption", publishPayload.instagramCaption);
+      formData.append("tiktok_caption", publishPayload.tiktokCaption);
+      formData.append("tweets", JSON.stringify(publishPayload.tweets));
+      formData.append("platforms", Array.from(selectedPlatforms).join(","));
+
+      const res = await fetch(`${PIPELINE_URL}/publish`, { method: "POST", body: formData });
+      const data = await res.json();
+      setPublishResults(data.results || {});
+    } catch (err) {
+      alert("Publish failed: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const detectedMode = files.length > 0 ? detectMode(files) : null;
   const modeInfo = detectedMode ? MODE_LABELS[detectedMode] : null;
   const isProcessing = currentJob?.status === "processing" || currentJob?.status === "queued";
@@ -254,20 +300,75 @@ export default function VideoDropZone({ seriesText }: VideoDropZoneProps = {}) {
           <p className="text-right text-xs text-zinc-400 mt-1">{currentJob?.progress || 0}%</p>
         </div>
       ) : currentJob?.status === "complete" ? (
-        <div className="p-6 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-3">
-            <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
+        <div className="p-5">
+          <div className="text-center mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 mb-2">
+              <svg className="w-6 h-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-zinc-900">Video processed!</p>
+            <p className="text-xs text-zinc-500">Captions burned in, ready to publish.</p>
           </div>
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Processing complete!</p>
-          <p className="text-xs text-zinc-500 mb-4">Your video is ready to download.</p>
-          <div className="flex gap-2 justify-center">
-            <button onClick={downloadOutput} className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-lg cursor-pointer">
-              Download Video
+
+          {publishResults ? (
+            <div className="space-y-2 mb-4">
+              {Object.entries(publishResults).map(([platform, result]) => (
+                <div key={platform} className={`px-3 py-2 rounded-lg border text-xs ${
+                  result.success ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{result.success ? "✓" : "✗"} {platform.toUpperCase()}</span>
+                    {result.url && (
+                      <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline">
+                        View post →
+                      </a>
+                    )}
+                  </div>
+                  {result.error && <div className="text-[11px] mt-1 opacity-80">{result.error.slice(0, 120)}</div>}
+                </div>
+              ))}
+            </div>
+          ) : publishPayload ? (
+            <>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Publish to:</p>
+              <div className="flex gap-2 mb-3 flex-wrap">
+                {[
+                  { key: "youtube", label: "YouTube", color: "red" },
+                  { key: "x", label: "X (Tweets)", color: "zinc" },
+                  { key: "instagram", label: "Instagram", color: "purple", note: "manual" },
+                ].map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => togglePlatform(p.key)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
+                      selectedPlatforms.has(p.key)
+                        ? "bg-zinc-900 text-white border-zinc-900"
+                        : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300"
+                    }`}
+                  >
+                    {p.label}{p.note ? ` (${p.note})` : ""}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+
+          <div className="flex gap-2">
+            <button onClick={downloadOutput} className="flex-1 px-4 py-2 bg-white hover:bg-zinc-50 text-zinc-700 border border-zinc-200 text-sm font-medium rounded-lg cursor-pointer">
+              Download
             </button>
+            {publishPayload && !publishResults && (
+              <button
+                onClick={handlePublish}
+                disabled={publishing || selectedPlatforms.size === 0}
+                className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-sm font-semibold rounded-lg cursor-pointer"
+              >
+                {publishing ? "Publishing..." : "Publish Live"}
+              </button>
+            )}
             <button onClick={clearAll} className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg cursor-pointer">
-              Process Another
+              Reset
             </button>
           </div>
         </div>

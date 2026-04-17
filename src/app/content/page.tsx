@@ -8,6 +8,7 @@ import RejectModal from "@/components/RejectModal";
 import AddToolModal from "@/components/AddToolModal";
 import VideoDropZone from "@/components/VideoDropZone";
 import SocialCaptions from "@/components/SocialCaptions";
+import { generateCaptions } from "@/lib/caption-generator";
 import { mockQueue } from "@/lib/mock-data";
 import { QueuedTool } from "@/lib/types";
 
@@ -210,13 +211,25 @@ export default function ContentPage() {
             <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
               Upload Recorded Videos
             </h2>
-            <VideoDropZone
-              seriesText={
-                currentItem.script.hookType === "B"
-                  ? `AI TOOLS YOU NEED TO KNOW. PART ${currentItem.tool.partNumber}.`
-                  : undefined
-              }
-            />
+            {(() => {
+              const captions = generateCaptions(currentItem);
+              return (
+                <VideoDropZone
+                  seriesText={
+                    currentItem.script.hookType === "B"
+                      ? `AI TOOLS YOU NEED TO KNOW. PART ${currentItem.tool.partNumber}.`
+                      : undefined
+                  }
+                  publishPayload={{
+                    title: captions.youtubeTitle,
+                    youtubeDescription: captions.youtubeDescription,
+                    instagramCaption: captions.instagram,
+                    tiktokCaption: captions.tiktok,
+                    tweets: currentItem.tweets.map((t) => t.content),
+                  }}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>
