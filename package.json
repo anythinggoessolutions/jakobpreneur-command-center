@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.98",
     "@vercel/blob": "^2.3.3",
     "next": "16.2.3",
     "react": "19.2.4",

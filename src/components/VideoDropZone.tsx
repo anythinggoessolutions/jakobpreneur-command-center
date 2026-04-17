@@ -66,6 +66,13 @@ interface PublishPayload {
   instagramCaption: string;
   tiktokCaption: string;
   tweets: string[];
+  carouselSpec?: {
+    headline: string;
+    slides: string[];
+    carouselType: "famous_person" | "tool_breakdown";
+    toolName: string;
+    toolUrl: string;
+  };
 }
 
 interface VideoDropZoneProps {
@@ -225,6 +232,9 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
       formData.append("tiktok_caption", publishPayload.tiktokCaption);
       formData.append("tweets", JSON.stringify(publishPayload.tweets));
       formData.append("platforms", Array.from(selectedPlatforms).join(","));
+      if (publishPayload.carouselSpec) {
+        formData.append("carousel_spec", JSON.stringify(publishPayload.carouselSpec));
+      }
 
       const res = await fetch(`${PIPELINE_URL}/publish`, { method: "POST", body: formData });
       const data = await res.json();

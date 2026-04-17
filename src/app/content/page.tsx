@@ -226,6 +226,13 @@ export default function ContentPage() {
                     instagramCaption: captions.instagram,
                     tiktokCaption: captions.tiktok,
                     tweets: currentItem.tweets.map((t) => t.content),
+                    carouselSpec: {
+                      headline: currentItem.carousel.headline,
+                      slides: currentItem.carousel.slides,
+                      carouselType: currentItem.carousel.type,
+                      toolName: currentItem.tool.name,
+                      toolUrl: currentItem.tool.url,
+                    },
                   }}
                 />
               );
