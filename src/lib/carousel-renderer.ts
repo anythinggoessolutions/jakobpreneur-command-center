@@ -12,7 +12,22 @@
  * Uses @napi-rs/canvas (pure Rust, works on Vercel serverless).
  */
 
-import { createCanvas } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
+import path from "path";
+
+// Register bundled Inter fonts. Vercel's Linux serverless runtime has no
+// system fonts, so `Helvetica` (macOS-only) silently renders nothing.
+const FONTS_DIR = path.join(process.cwd(), "src/lib/fonts");
+let fontsRegistered = false;
+function ensureFonts() {
+  if (fontsRegistered) return;
+  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Bold.ttf"), "Inter");
+  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Black.ttf"), "InterBlack");
+  fontsRegistered = true;
+}
+
+const FONT_BOLD = "Inter";
+const FONT_BLACK = "InterBlack";
 
 const WIDTH = 1080;
 const HEIGHT = 1350;
@@ -69,7 +84,7 @@ function renderHookSlide(spec: CarouselSpec): Buffer {
 
   // Top-left page number
   ctx.fillStyle = MUTED;
-  ctx.font = "bold 32px Helvetica";
+  ctx.font = "bold 32px Inter";
   ctx.fillText("01 / 06", 60, 90);
 
   // Green dot accent
@@ -81,13 +96,13 @@ function renderHookSlide(spec: CarouselSpec): Buffer {
   // Tool name label (small, top)
   if (spec.toolName) {
     ctx.fillStyle = YELLOW;
-    ctx.font = "bold 28px Helvetica";
+    ctx.font = "bold 28px Inter";
     ctx.fillText(spec.toolName.toUpperCase(), 60, 160);
   }
 
   // Big centered headline
   ctx.fillStyle = FG;
-  ctx.font = "bold 92px Helvetica";
+  ctx.font = `bold 92px ${FONT_BLACK}`;
   const headlineLines = wrapText(ctx, spec.headline, WIDTH - 120);
   const startY = HEIGHT / 2 - (headlineLines.length * 100) / 2;
   headlineLines.forEach((line, i) => {
@@ -96,7 +111,7 @@ function renderHookSlide(spec: CarouselSpec): Buffer {
 
   // Green "Swipe →" at bottom
   ctx.fillStyle = GREEN;
-  ctx.font = "bold 40px Helvetica";
+  ctx.font = "bold 40px Inter";
   ctx.fillText("Swipe →", 60, HEIGHT - 100);
 
   return canvas.toBuffer("image/png");
@@ -119,7 +134,7 @@ function renderContentSlide(
 
   // Top-left page number
   ctx.fillStyle = MUTED;
-  ctx.font = "bold 32px Helvetica";
+  ctx.font = "bold 32px Inter";
   ctx.fillText(
     `${String(pageNum).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`,
     60,
@@ -128,7 +143,7 @@ function renderContentSlide(
 
   // Step label in yellow pill
   const labelText = stepLabel.toUpperCase();
-  ctx.font = "bold 36px Helvetica";
+  ctx.font = "bold 36px Inter";
   const labelWidth = ctx.measureText(labelText).width + 60;
   ctx.fillStyle = YELLOW;
   ctx.beginPath();
@@ -145,12 +160,12 @@ function renderContentSlide(
   ctx.fill();
 
   ctx.fillStyle = BG;
-  ctx.font = "bold 36px Helvetica";
+  ctx.font = "bold 36px Inter";
   ctx.fillText(labelText, labelX + 30, labelY + labelH / 2 + 13);
 
   // Content text (large, centered-ish)
   ctx.fillStyle = FG;
-  ctx.font = "bold 68px Helvetica";
+  ctx.font = `bold 68px ${FONT_BLACK}`;
   const lines = wrapText(ctx, content, WIDTH - 120);
   const contentStartY = 380;
   lines.forEach((line, i) => {
@@ -179,7 +194,7 @@ function renderFinalSlide(
 
   // Top-left page number
   ctx.fillStyle = MUTED;
-  ctx.font = "bold 32px Helvetica";
+  ctx.font = "bold 32px Inter";
   ctx.fillText(
     `${String(totalPages).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`,
     60,
@@ -192,7 +207,7 @@ function renderFinalSlide(
   const fontSize = lines.length <= 3 ? 90 : lines.length <= 5 ? 74 : 64;
   const lineHeight = Math.round(fontSize * 1.15);
   ctx.fillStyle = FG;
-  ctx.font = `bold ${fontSize}px Helvetica`;
+  ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
   const totalH = lines.length * lineHeight;
   const blockStartY = 180;
   lines.forEach((line, i) => {
@@ -202,7 +217,7 @@ function renderFinalSlide(
 
   // Follow CTA in green pill — placed below the text block
   const cta = "FOLLOW @JAKOBPRENEUR";
-  ctx.font = "bold 54px Helvetica";
+  ctx.font = "bold 54px Inter";
   const ctaW = ctx.measureText(cta).width + 80;
   const ctaH = 110;
   const ctaX = (WIDTH - ctaW) / 2;
@@ -219,12 +234,12 @@ function renderFinalSlide(
   ctx.fill();
 
   ctx.fillStyle = BG;
-  ctx.font = "bold 54px Helvetica";
+  ctx.font = "bold 54px Inter";
   ctx.fillText(cta, ctaX + 40, ctaY + ctaH / 2 + 20);
 
   // Small NOW YOU KNOW tag at bottom
   ctx.fillStyle = YELLOW;
-  ctx.font = "bold 36px Helvetica";
+  ctx.font = "bold 36px Inter";
   const nyk = "NOW YOU KNOW.";
   const nykW = ctx.measureText(nyk).width;
   ctx.fillText(nyk, (WIDTH - nykW) / 2, HEIGHT - 100);
@@ -237,6 +252,7 @@ function renderFinalSlide(
  * Slides: 1 hook + N content slides + 1 final CTA.
  */
 export function renderCarousel(spec: CarouselSpec): Buffer[] {
+  ensureFonts();
   const contentSlideCount = Math.min(4, spec.slides.length);
   const totalPages = 1 + contentSlideCount + 1;
 
