@@ -201,10 +201,22 @@ function renderFinalSlide(
     90
   );
 
-  // Big closing message centered — auto-sized based on line count
+  // Big closing message centered — auto-size by both line count AND the
+  // widest line's measured width so long lines like "TAKE ACTION EVERY DAY"
+  // never overflow the canvas. Start from the line-count cap and shrink
+  // until the widest line fits inside the horizontal margins.
   const lines = closingText.split("\n");
-  // Scale font based on lines so text always fits nicely
-  const fontSize = lines.length <= 3 ? 90 : lines.length <= 5 ? 74 : 64;
+  const MARGIN_X = 60;
+  const maxWidth = WIDTH - MARGIN_X * 2;
+  const lineCountCap = lines.length <= 3 ? 90 : lines.length <= 5 ? 74 : 64;
+  let fontSize = lineCountCap;
+  const MIN_FONT = 40;
+  while (fontSize > MIN_FONT) {
+    ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    if (widest <= maxWidth) break;
+    fontSize -= 2;
+  }
   const lineHeight = Math.round(fontSize * 1.15);
   ctx.fillStyle = FG;
   ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
