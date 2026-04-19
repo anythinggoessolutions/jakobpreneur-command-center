@@ -42,8 +42,12 @@ export async function GET() {
       .sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime))
       .slice(0, 10);
 
+    // Only surface posted tweets from the last 24h — keeps the timeline
+    // focused on upcoming + recent, not a growing history.
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - ONE_DAY_MS;
     const posted = mapped
-      .filter((t) => t.status === "posted")
+      .filter((t) => t.status === "posted" && t.postedAt && Date.parse(t.postedAt) >= cutoff)
       .sort((a, b) => b.postedAt.localeCompare(a.postedAt))
       .slice(0, 10);
 

@@ -28,7 +28,7 @@ type VideoFields = {
 export async function GET() {
   try {
     const records = await listRecords<VideoFields>("Videos");
-    const videos = records.map((r) => ({
+    const allVideos = records.map((r) => ({
       id: r.id,
       toolName: r.fields["Tool Name"] || "",
       partNumber: r.fields["Part Number"] || 0,
@@ -43,6 +43,17 @@ export async function GET() {
       postedAt: r.fields["Posted At"] || "",
       error: r.fields.Error || "",
     }));
+
+    // Hide `posted` rows older than 24h — the queue should focus on what's
+    // upcoming and what needs attention (scheduled, partial, failed always
+    // stay visible). Rows without a Posted At fall back to Scheduled Time.
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - ONE_DAY_MS;
+    const videos = allVideos.filter((v) => {
+      if (v.status !== "posted") return true;
+      const postedTs = v.postedAt ? Date.parse(v.postedAt) : v.scheduledTime ? Date.parse(v.scheduledTime) : 0;
+      return postedTs >= cutoff;
+    });
 
     // Sort by scheduled datetime (prefer ISO Scheduled Time), fall back to date
     videos.sort((a, b) => {
