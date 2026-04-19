@@ -220,6 +220,29 @@ export async function GET(req: NextRequest) {
           throw new Error(`carousel container failed: ${JSON.stringify(carouselData).slice(0, 200)}`);
         }
 
+        // Wait until IG finishes assembling the container before publishing.
+        // Without this, media_publish returns "Media ID is not available"
+        // (error 2207027) because IG's async pipeline hasn't caught up.
+        let containerReady = false;
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const sRes = await fetch(
+            `https://graph.instagram.com/${carouselData.id}?fields=status_code,status,error_message&access_token=${igAccessToken}`,
+          );
+          const sData = await sRes.json();
+          if (sData.status_code === "FINISHED") {
+            containerReady = true;
+            break;
+          }
+          if (sData.status_code === "ERROR") {
+            const msg = sData.error_message || sData.status || "unknown";
+            throw new Error(`carousel container processing failed: ${msg}`);
+          }
+        }
+        if (!containerReady) {
+          throw new Error("carousel container did not finish in 2min");
+        }
+
         // Publish
         const publishRes = await fetch(
           `https://graph.instagram.com/${igUserId}/media_publish`,
