@@ -54,6 +54,57 @@ function buildSignature(
 }
 
 /**
+ * Post a tweet via X API v2 using OAuth 1.0a.
+ * Returns { tweet_id, url }.
+ */
+export async function postTweet(text: string): Promise<{ tweet_id: string; url: string }> {
+  const { consumerKey, consumerSecret, accessToken, accessTokenSecret } = getOAuth1Credentials();
+  const url = "https://api.twitter.com/2/tweets";
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: timestamp,
+    oauth_token: accessToken,
+    oauth_version: "1.0",
+  };
+
+  // OAuth 1.0a for v2 endpoints signs URL + method only (JSON body excluded)
+  const signature = buildSignature("POST", url, oauthParams, consumerSecret, accessTokenSecret);
+  oauthParams.oauth_signature = signature;
+
+  const authHeader = "OAuth " + Object.keys(oauthParams)
+    .sort()
+    .map((k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
+    .join(", ");
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: authHeader,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text: text.slice(0, 280) }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Twitter post failed (${res.status}): ${body.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const tweet_id = data?.data?.id || "";
+  return {
+    tweet_id,
+    url: tweet_id ? `https://twitter.com/jakobpreneur/status/${tweet_id}` : "",
+  };
+}
+
+/**
  * Make an authenticated request to the X API using OAuth 1.0a.
  */
 export async function twitterApiRequest(url: string, method = "GET"): Promise<Response> {

@@ -89,6 +89,73 @@ export function findNextAvailableSlot(
   throw new Error("No available slots found in the next 30 days");
 }
 
+// Tweet slots — 5 per day, every 3 hours during peak engagement
+// Per SKILL_2: "5 tweets per day, post times spread across the day"
+const TWEET_TIME_SLOTS = [
+  { hour: 9, minute: 0 },   //  9:00 AM EST
+  { hour: 12, minute: 0 },  // 12:00 PM EST
+  { hour: 15, minute: 0 },  //  3:00 PM EST
+  { hour: 18, minute: 0 },  //  6:00 PM EST
+  { hour: 21, minute: 0 },  //  9:00 PM EST
+];
+
+export interface TweetSlot {
+  datetime: string; // ISO 8601 UTC
+  estLabel: string; // "9:00 AM EST" for display
+}
+
+/**
+ * Return the next `count` tweet slot datetimes from `startFrom` (default: now),
+ * skipping any slots in `occupied` (set of ISO datetimes already taken).
+ * Tweet slots are independent of video/carousel slots.
+ */
+export function nextTweetSlots(
+  count: number,
+  occupied: Set<string> = new Set(),
+  startFrom?: Date,
+): TweetSlot[] {
+  const now = startFrom || new Date();
+  const estOffset = getESTOffset(now);
+  const estNow = new Date(now.getTime() + estOffset);
+
+  const out: TweetSlot[] = [];
+  let dayOffset = 0;
+  while (out.length < count && dayOffset < 30) {
+    const day = new Date(estNow);
+    day.setUTCDate(day.getUTCDate() + dayOffset);
+    day.setUTCHours(0, 0, 0, 0);
+
+    for (const slot of TWEET_TIME_SLOTS) {
+      if (out.length >= count) break;
+
+      const slotEst = new Date(day);
+      slotEst.setUTCHours(slot.hour, slot.minute, 0, 0);
+
+      // Skip past slots (today only)
+      if (dayOffset === 0 && slotEst <= estNow) continue;
+
+      // Convert EST back to UTC by subtracting the offset
+      const slotUtc = new Date(slotEst.getTime() - estOffset);
+      const iso = slotUtc.toISOString();
+
+      if (occupied.has(iso)) continue;
+
+      const hour12 = slot.hour > 12 ? slot.hour - 12 : slot.hour === 0 ? 12 : slot.hour;
+      const ampm = slot.hour >= 12 ? "PM" : "AM";
+      out.push({
+        datetime: iso,
+        estLabel: `${hour12}:${padTime(slot.minute)} ${ampm} EST`,
+      });
+    }
+    dayOffset++;
+  }
+
+  if (out.length < count) {
+    throw new Error(`Could only find ${out.length} tweet slots in next 30 days`);
+  }
+  return out;
+}
+
 /**
  * Schedule multiple videos at once (e.g., batch recording session).
  * Returns an array of scheduled slots, one per video.

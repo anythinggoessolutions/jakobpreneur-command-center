@@ -61,27 +61,29 @@ export default function SocialCaptions({ item }: SocialCaptionsProps) {
   ];
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-zinc-100">
-        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
+    <div className="bg-white rounded-2xl border border-zinc-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      <div className="px-7 py-5 border-b border-zinc-100">
+        <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em]">
           Social Media Captions
         </h3>
-        <p className="text-xs text-zinc-500 mt-0.5">Auto-generated per platform with relevant hashtags.</p>
+        <p className="text-sm text-zinc-500 mt-1 font-light">
+          Auto-generated per platform with relevant hashtags.
+        </p>
       </div>
-      <div className="divide-y divide-zinc-100">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-zinc-100">
         {items.map(({ key, text }) => {
           const style = PLATFORM_STYLES[key];
           const isOverLimit = text.length > style.limit;
           const isDark = key === "tiktok";
           return (
-            <div key={key} className="px-6 py-4">
-              <div className="flex items-center justify-between mb-2">
+            <div key={key} className="bg-white px-6 py-5">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <span className="text-base">{style.icon}</span>
                   <span className={`text-sm font-semibold ${isDark ? "text-zinc-900" : style.textColor}`}>
                     {style.label}
                   </span>
-                  <span className={`text-xs ${isOverLimit ? "text-red-500 font-semibold" : "text-zinc-400"}`}>
+                  <span className={`text-[11px] font-medium ${isOverLimit ? "text-red-500" : "text-zinc-400"}`}>
                     {text.length}/{style.limit}
                   </span>
                 </div>
@@ -93,8 +95,8 @@ export default function SocialCaptions({ item }: SocialCaptionsProps) {
                 </button>
               </div>
               <pre
-                className={`text-xs whitespace-pre-wrap break-words font-sans leading-relaxed rounded-lg p-3 border ${style.color} ${isDark ? "text-white" : "text-zinc-700"}`}
-                style={{ maxHeight: "200px", overflow: "auto" }}
+                className={`text-[13px] whitespace-pre-wrap break-words font-sans leading-relaxed rounded-xl p-4 border ${style.color} ${isDark ? "text-white" : "text-zinc-700"}`}
+                style={{ maxHeight: "240px", overflow: "auto" }}
               >
                 {text}
               </pre>

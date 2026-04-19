@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ScriptCard from "@/components/ScriptCard";
 import TweetPreview from "@/components/TweetPreview";
 import QueueItem from "@/components/QueueItem";
@@ -9,68 +9,178 @@ import AddToolModal from "@/components/AddToolModal";
 import VideoDropZone from "@/components/VideoDropZone";
 import SocialCaptions from "@/components/SocialCaptions";
 import { generateCaptions } from "@/lib/caption-generator";
-import { mockQueue } from "@/lib/mock-data";
 import { QueuedTool } from "@/lib/types";
 
 export default function ContentPage() {
-  const [queue, setQueue] = useState<QueuedTool[]>(mockQueue);
+  const [queue, setQueue] = useState<QueuedTool[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [completedCount, setCompletedCount] = useState(0);
   const [rejectedCount, setRejectedCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverMessage, setDiscoverMessage] = useState<string | null>(null);
+
+  const refetchQueue = async () => {
+    const res = await fetch("/api/tools/queue", { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    setQueue(data.queue || []);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        await refetchQueue();
+      } catch (err) {
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleDiscoverMore = async () => {
+    if (discovering) return;
+    setDiscovering(true);
+    setDiscoverMessage("Searching the web for new tools — this takes 2-3 min…");
+    try {
+      const res = await fetch("/api/tools/discover", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setDiscoverMessage(`Discovery failed: ${data.error || `HTTP ${res.status}`}`);
+        return;
+      }
+      const persisted = data.persisted ?? 0;
+      const failed = data.failed ?? 0;
+      setDiscoverMessage(
+        persisted > 0
+          ? `Added ${persisted} new tool${persisted === 1 ? "" : "s"} to the queue.${failed ? ` (${failed} failed)` : ""}`
+          : "No new tools added (all duplicates or failed).",
+      );
+      await refetchQueue();
+    } catch (err) {
+      setDiscoverMessage(`Discovery failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setDiscovering(false);
+      // Auto-clear the message after 8 seconds
+      setTimeout(() => setDiscoverMessage(null), 8000);
+    }
+  };
 
   const currentItem = queue[currentIndex];
   const queueItems = queue.slice(currentIndex + 1, currentIndex + 6);
   const remainingCount = queue.length - currentIndex;
 
-  const handleAddTool = (input: { name: string; url: string; reason: string; hookType: "A" | "B" | "C" }) => {
-    const newId = String(Date.now());
+  const handleAddTool = async (input: { name: string; url: string; reason: string; hookType: "A" | "B" | "C" }) => {
+    // Optimistic placeholder while Claude generates and persists to Airtable.
+    const tempId = `temp-${Date.now()}`;
     const partNum = queue.length + 1;
-    const hookTemplates = {
-      A: `I was today years old when I found this out.\nDid you know ${input.name} can [describe the key feature]?`,
-      B: `@jakobpreneur: Powerful AI Tools You Need To Know. Part ${partNum}.\nIf you go to this website, you can [primary benefit].`,
-      C: `[Bold statement about the problem ${input.name} solves].\nDid you know if you [action], it'll [result]?`,
+    const placeholderHook: Record<"A" | "B" | "C", string> = {
+      A: `I was today years old when I found this out.\nDid you know ${input.name} can [generating...]?`,
+      B: `@jakobpreneur: Powerful AI Tools You Should Know. Part ${partNum}.\nIf you go to this website, you can [generating...]`,
+      C: `[Generating bold claim about ${input.name}...]\nDid you know if you [action], it'll [result]?`,
     };
-    const newTool: QueuedTool = {
+    const placeholderTool: QueuedTool = {
       tool: {
-        id: newId, name: input.name, url: input.url,
+        id: tempId, name: input.name, url: input.url,
         source: input.reason || "Manual submission",
-        category: "Custom", description: `Manually added. Claude will research ${input.url} and generate a full script.`,
+        category: "Generating…", description: `Claude is generating and saving a full bundle for ${input.name}.`,
         status: "queued", partNumber: partNum, hookType: input.hookType, relevanceScore: 99,
       },
       script: {
-        toolId: newId, hookType: input.hookType,
-        hook: hookTemplates[input.hookType],
+        toolId: tempId, hookType: input.hookType,
+        hook: placeholderHook[input.hookType],
         bridge: "Did you know if you go to this website...",
-        benefit: `[Claude will research ${input.name} and fill this in]`,
-        demo: "You can [feature 1].\nAnd you can [feature 2].\nYou can also [feature 3].",
+        benefit: "Generating…",
+        demo: "Generating demo narration…",
         close: "Now you know.",
-        fullScript: `${hookTemplates[input.hookType]}\n\n[Script will be generated after researching ${input.url}]\n\nNow you know.`,
+        fullScript: `${placeholderHook[input.hookType]}\n\nGenerating…\n\nNow you know.`,
         estimatedSeconds: 22,
       },
       tweets: [
-        { toolId: newId, content: `Check out ${input.name} \u2014 [to be generated]. ${input.url}`, type: "tool_of_day" },
-        { toolId: newId, content: `Quick tip: [to be generated for ${input.name}].`, type: "quick_tip" },
-        { toolId: newId, content: `[Engagement question about ${input.name} to be generated]`, type: "engagement" },
-        { toolId: newId, content: `[AI fact about ${input.name} to be generated]`, type: "fact" },
-        { toolId: newId, content: `[Repurposed hook for ${input.name}]. Now you know.`, type: "repurposed_hook" },
+        { toolId: tempId, content: "Generating tweet…", type: "tool_of_day" },
+        { toolId: tempId, content: "Generating tweet…", type: "quick_tip" },
+        { toolId: tempId, content: "Generating tweet…", type: "engagement" },
+        { toolId: tempId, content: "Generating tweet…", type: "fact" },
+        { toolId: tempId, content: "Generating tweet…", type: "repurposed_hook" },
       ],
       carousel: {
-        toolId: newId, type: "tool_breakdown",
-        headline: `[Carousel headline for ${input.name} to be generated]`,
-        slides: ["What it does: [TBD]", "How to use it: [TBD]", "Why it matters: [TBD]", "Who it's for: [TBD]"],
+        toolId: tempId, type: "tool_breakdown",
+        headline: "Generating carousel headline…",
+        slides: [
+          "WHAT IT DOES: generating…",
+          "HOW TO USE IT: generating…",
+          "WHY IT MATTERS: generating…",
+          "WHO IT'S FOR: generating…",
+        ],
       },
     };
-    const newQueue = [...queue];
-    newQueue.splice(currentIndex + 1, 0, newTool);
-    setQueue(newQueue);
+    setQueue((q) => {
+      const next = [...q];
+      next.splice(currentIndex + 1, 0, placeholderTool);
+      return next;
+    });
     setShowAddModal(false);
+
+    // Generate + persist (Tool + Script in Airtable) and replace placeholder with the real record.
+    try {
+      const res = await fetch("/api/tools/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: input.name,
+          url: input.url,
+          hookType: input.hookType,
+          reason: input.reason,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const queuedTool = (await res.json()) as QueuedTool;
+      setQueue((q) => q.map((item) => (item.tool.id === tempId ? queuedTool : item)));
+    } catch (err) {
+      console.error("Tool add failed:", err);
+      setQueue((q) =>
+        q.map((item) =>
+          item.tool.id !== tempId
+            ? item
+            : {
+                ...item,
+                tool: {
+                  ...item.tool,
+                  category: "Generation failed",
+                  description: `Error: ${err instanceof Error ? err.message : String(err)}. Remove and retry.`,
+                },
+              },
+        ),
+      );
+    }
   };
 
   const handleComplete = async () => {
     const tool = currentItem.tool;
-    // Schedule the video via API
+    // Mark Tool as recorded in Airtable (only if it's an Airtable record id, not a temp placeholder)
+    if (!tool.id.startsWith("temp-")) {
+      try {
+        await fetch(`/api/tools/${tool.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "recorded" }),
+        });
+      } catch (err) {
+        console.error("Failed to mark recorded:", err);
+      }
+    }
+    // Reserve a video schedule slot
     try {
       const res = await fetch("/api/schedule", {
         method: "POST",
@@ -98,8 +208,19 @@ export default function ContentPage() {
     setShowRejectModal(true);
   };
 
-  const handleConfirmReject = (reason: string) => {
-    console.log(`Rejected ${currentItem.tool.name}: ${reason}`);
+  const handleConfirmReject = async (reason: string) => {
+    const tool = currentItem.tool;
+    if (!tool.id.startsWith("temp-")) {
+      try {
+        await fetch(`/api/tools/${tool.id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "rejected", rejectionReason: reason }),
+        });
+      } catch (err) {
+        console.error("Failed to mark rejected:", err);
+      }
+    }
     setRejectedCount((c) => c + 1);
     setShowRejectModal(false);
     if (currentIndex < queue.length - 1) {
@@ -107,19 +228,65 @@ export default function ContentPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-12 text-center">
+        <h2 className="text-2xl font-bold text-zinc-900 mb-2">Loading queue…</h2>
+        <p className="text-zinc-500">Fetching tools from Airtable.</p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="max-w-4xl mx-auto px-6 py-12 text-center">
+        <h2 className="text-2xl font-bold text-zinc-900 mb-2">Failed to load queue</h2>
+        <p className="text-zinc-500">{loadError}</p>
+      </div>
+    );
+  }
+
   if (!currentItem) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-12 text-center">
         <h2 className="text-2xl font-bold text-zinc-900 mb-2">Queue Empty</h2>
-        <p className="text-zinc-500">All tools have been processed. Claude is discovering more...</p>
+        <p className="text-zinc-500 mb-6">
+          No queued tools. Auto-discovery runs daily at 7am EST and adds new ones — or trigger one now.
+        </p>
+        <div className="flex justify-center gap-3">
+          <button
+            onClick={handleDiscoverMore}
+            disabled={discovering}
+            className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-semibold rounded-lg disabled:opacity-50 disabled:cursor-wait cursor-pointer"
+          >
+            {discovering ? "Discovering…" : "Discover More"}
+          </button>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="px-4 py-2 bg-white border border-zinc-300 hover:bg-zinc-50 text-zinc-900 text-sm font-semibold rounded-lg cursor-pointer"
+          >
+            Add Tool Manually
+          </button>
+        </div>
+        {discoverMessage && (
+          <div className="mt-6 mx-auto max-w-md px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-700">
+            {discoverMessage}
+          </div>
+        )}
+        {showAddModal && (
+          <AddToolModal
+            onSubmit={handleAddTool}
+            onCancel={() => setShowAddModal(false)}
+          />
+        )}
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="max-w-7xl mx-auto px-6 py-8">
       {/* Stats bar */}
-      <div className="flex items-center gap-5 mb-6">
+      <div className="flex items-center gap-6 mb-8">
         <div className="flex items-center gap-1.5">
           <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
           <span className="text-sm text-zinc-500">
@@ -139,7 +306,17 @@ export default function ContentPage() {
           </span>
         </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-zinc-400 font-medium">Powerful AI Tools You Need To Know</span>
+          <span className="text-xs text-zinc-400 font-medium">Powerful AI Tools You Should Know</span>
+          <button
+            onClick={handleDiscoverMore}
+            disabled={discovering}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-zinc-300 hover:bg-zinc-50 text-zinc-900 text-xs font-semibold rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className={`h-3.5 w-3.5 ${discovering ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {discovering ? "Discovering…" : "Discover More"}
+          </button>
           <button
             onClick={() => setShowAddModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
@@ -152,11 +329,17 @@ export default function ContentPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      {discoverMessage && (
+        <div className="mb-4 px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm text-zinc-700">
+          {discoverMessage}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         {/* Main column */}
-        <div className="xl:col-span-2 space-y-6">
+        <div className="xl:col-span-2 space-y-8">
           <div>
-            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
+            <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em] mb-3">
               Next Video to Record
             </h2>
             <ScriptCard
@@ -172,7 +355,7 @@ export default function ContentPage() {
 
         {/* Sidebar */}
         <div>
-          <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
+          <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em] mb-3">
             Up Next
           </h2>
           <div className="space-y-2">
@@ -188,27 +371,27 @@ export default function ContentPage() {
           )}
 
           {/* Queue health */}
-          <div className="mt-4 p-4 bg-white rounded-lg border border-zinc-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-zinc-400 uppercase font-bold">Queue Health</span>
-              <span className={`text-xs font-bold ${remainingCount >= 20 ? "text-green-600" : remainingCount >= 10 ? "text-amber-600" : "text-red-500"}`}>
-                {remainingCount >= 20 ? "Healthy" : remainingCount >= 10 ? "Low" : "Critical"}
+          <div className="mt-6 p-5 bg-white rounded-2xl border border-zinc-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[11px] text-zinc-400 uppercase font-bold tracking-[0.12em]">Queue Health</span>
+              <span className={`text-xs font-semibold ${remainingCount >= 20 ? "text-green-600" : remainingCount >= 10 ? "text-amber-600" : "text-zinc-500"}`}>
+                {remainingCount >= 20 ? "Healthy" : remainingCount >= 10 ? "Low" : `${remainingCount} left`}
               </span>
             </div>
             <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${remainingCount >= 20 ? "bg-green-500" : remainingCount >= 10 ? "bg-amber-400" : "bg-red-500"}`}
+                className={`h-full rounded-full transition-all ${remainingCount >= 20 ? "bg-green-500" : remainingCount >= 10 ? "bg-amber-400" : "bg-zinc-400"}`}
                 style={{ width: `${Math.min(100, (remainingCount / 25) * 100)}%` }}
               />
             </div>
-            <p className="text-[11px] text-zinc-400 mt-2">
+            <p className="text-[11px] text-zinc-400 mt-2.5 font-light">
               Target: 20+ tools ready
             </p>
           </div>
 
           {/* Video Drop Zone */}
-          <div className="mt-4">
-            <h2 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">
+          <div className="mt-6">
+            <h2 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em] mb-3">
               Upload Recorded Videos
             </h2>
             {(() => {
@@ -217,7 +400,7 @@ export default function ContentPage() {
                 <VideoDropZone
                   seriesText={
                     currentItem.script.hookType === "B"
-                      ? `AI TOOLS YOU NEED TO KNOW. PART ${currentItem.tool.partNumber}.`
+                      ? `POWERFUL AI TOOLS YOU SHOULD KNOW. PART ${currentItem.tool.partNumber}.`
                       : undefined
                   }
                   publishPayload={{

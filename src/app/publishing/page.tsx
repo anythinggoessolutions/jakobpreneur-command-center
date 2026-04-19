@@ -291,13 +291,14 @@ function PublishingContent() {
       </div>
 
       {/* Setup info */}
-      <div className="mt-8 p-5 bg-zinc-50 rounded-xl border border-zinc-200">
-        <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3">How Publishing Works</h3>
+      <div className="mt-8 p-5 bg-zinc-50 rounded-2xl border border-zinc-200/70">
+        <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em] mb-3">How Publishing Works</h3>
         <div className="space-y-2 text-sm text-zinc-600">
           <p>1. <strong>Connect</strong> your platform accounts above</p>
-          <p>2. <strong>Record</strong> a video from the Content tab and hit Complete</p>
-          <p>3. Videos are <strong>auto-scheduled</strong> to the next available time slot (9am, 1pm, or 7pm EST)</p>
-          <p>4. <strong>Make.com</strong> handles the actual posting on schedule</p>
+          <p>2. <strong>Drop</strong> a recording in the Content tab and hit <strong>Publish Live</strong></p>
+          <p>3. The Mac pipeline processes the video, uploads to YouTube + Instagram, and queues 5 tweets to Airtable across the day (9am / 12pm / 3pm / 6pm / 9pm EST)</p>
+          <p>4. A carousel is auto-scheduled to the next 9am / 1pm / 7pm EST video slot</p>
+          <p>5. A <strong>Vercel cron</strong> fires every 5 minutes — when a tweet or carousel hits its scheduled time, it posts automatically</p>
         </div>
       </div>
     </div>

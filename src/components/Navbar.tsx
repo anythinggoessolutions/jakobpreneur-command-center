@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { label: "Content", href: "/content", icon: "M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" },
@@ -12,6 +13,24 @@ const navItems = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [queueCount, setQueueCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/tools/queue", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setQueueCount((data.queue || []).length);
+      } catch {
+        // silent — count just won't render
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   return (
     <nav className="border-b border-zinc-200 bg-white">
@@ -49,7 +68,9 @@ export default function Navbar() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-zinc-100 border border-zinc-200">
               <div className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-xs text-zinc-600 font-medium">25 in queue</span>
+              <span className="text-xs text-zinc-600 font-medium">
+                {queueCount === null ? "…" : `${queueCount} in queue`}
+              </span>
             </div>
           </div>
         </div>

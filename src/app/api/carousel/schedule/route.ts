@@ -11,6 +11,8 @@ type VideoFields = {
   "File Path"?: string;
   Status?: string;
   "Scheduled Date"?: string;
+  "Scheduled Time"?: string;
+  "IG Caption"?: string;
   Platform?: string[];
   "Theme Tag"?: string;
 };
@@ -25,7 +27,7 @@ type VideoFields = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { toolName, headline, slides, carouselType, toolUrl } = body;
+    const { toolName, headline, slides, carouselType, toolUrl, igCaption } = body;
 
     if (!toolName || !headline || !Array.isArray(slides)) {
       return NextResponse.json(
@@ -67,6 +69,8 @@ export async function POST(req: NextRequest) {
       "Recorded Date": today,
       Status: "scheduled",
       "Scheduled Date": slot.date,
+      "Scheduled Time": slot.datetime,
+      "IG Caption": igCaption || "",
       Platform: ["Instagram", "TikTok"], // Carousels go to IG + TikTok only
       "File Path": carouselSpec,
       "Theme Tag": "carousel",
@@ -76,6 +80,7 @@ export async function POST(req: NextRequest) {
       id: record.id,
       scheduledDate: slot.date,
       scheduledTime: slot.time,
+      scheduledDatetime: slot.datetime,
       platforms: ["Instagram", "TikTok"],
     });
   } catch (err: unknown) {
