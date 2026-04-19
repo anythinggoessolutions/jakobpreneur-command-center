@@ -88,6 +88,8 @@ export async function POST(req: NextRequest) {
       ytTitle: ytTitle || toolName,
       ytDescription: ytDescription || "",
       platforms,
+      pendingPlatforms: [...platforms],
+      attemptCount: 0,
       sourceJobId: sourceJobId || "",
     };
 

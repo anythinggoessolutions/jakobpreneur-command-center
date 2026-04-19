@@ -272,11 +272,18 @@ export async function GET(req: NextRequest) {
   }
 
   // ---------- Videos ----------
+  // Scheduled videos flow: attempt each requested platform (YouTube, Instagram).
+  // Track per-platform success in the spec's `pendingPlatforms`. All platforms
+  // succeed → status=posted, blob deleted. Some succeed → status=partial, blob
+  // kept for next tick's retry. After 3 failed attempts → status=failed (blob
+  // kept so user can investigate and manually retry).
+  const MAX_VIDEO_ATTEMPTS = 3;
   try {
     const videoRecords = await listRecords<VideoFields>("Videos");
     const dueVideos = videoRecords.filter((r) => {
       if (r.fields["Theme Tag"] !== "video") return false;
-      if (r.fields.Status !== "scheduled") return false;
+      const s = r.fields.Status;
+      if (s !== "scheduled" && s !== "partial") return false;
       const scheduled = r.fields["Scheduled Time"];
       if (!scheduled) return false;
       return new Date(scheduled) <= now;
@@ -291,16 +298,23 @@ export async function GET(req: NextRequest) {
           ytTitle?: string;
           ytDescription?: string;
           platforms?: string[];
+          pendingPlatforms?: string[];
+          attemptCount?: number;
         };
         if (!spec.blobUrl) throw new Error("spec missing blobUrl");
 
-        const platforms = spec.platforms || [];
+        const allPlatforms = spec.platforms || [];
+        // Back-compat: if pendingPlatforms wasn't stored, assume all are pending
+        const pending = spec.pendingPlatforms || [...allPlatforms];
+        const attemptCount = (spec.attemptCount || 0) + 1;
+
+        const stillPending: string[] = [];
         const postResults: Record<string, unknown> = {};
         let postedUrl = "";
         let postedId = "";
 
         // YouTube
-        if (platforms.includes("YouTube")) {
+        if (pending.includes("YouTube")) {
           try {
             const yt = await publishVideoToYouTube(
               spec.blobUrl,
@@ -315,11 +329,12 @@ export async function GET(req: NextRequest) {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             postResults.youtube = { success: false, error: msg };
+            stillPending.push("YouTube");
           }
         }
 
         // Instagram
-        if (platforms.includes("Instagram")) {
+        if (pending.includes("Instagram")) {
           try {
             const ig = await publishVideoToInstagram(
               spec.blobUrl,
@@ -333,34 +348,50 @@ export async function GET(req: NextRequest) {
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             postResults.instagram = { success: false, error: msg };
+            stillPending.push("Instagram");
           }
         }
 
-        // Fail the whole record only if every requested platform failed
-        const anySuccess = Object.values(postResults).some(
-          (v) => (v as { success?: boolean }).success === true,
-        );
-        if (!anySuccess) {
-          throw new Error(
-            "all platforms failed: " + JSON.stringify(postResults).slice(0, 400),
-          );
+        if (stillPending.length === 0) {
+          // Everything succeeded — delete blob, mark posted.
+          try { await del(spec.blobUrl); } catch {}
+          await updateRecord<VideoFields>("Videos", rec.id, {
+            Status: "posted",
+            "Posted ID": postedId,
+            "Posted URL": postedUrl,
+            "Posted At": now.toISOString(),
+          });
+          summary.videos.fired++;
+          summary.videos.results.push({ id: rec.id, results: postResults });
+        } else if (attemptCount >= MAX_VIDEO_ATTEMPTS) {
+          // Too many retries — keep blob for manual inspection, mark failed.
+          const newSpec = { ...spec, pendingPlatforms: stillPending, attemptCount };
+          await updateRecord<VideoFields>("Videos", rec.id, {
+            Status: "failed",
+            "File Path": JSON.stringify(newSpec),
+            Error:
+              `${stillPending.join(",")} failed after ${attemptCount} attempts: ` +
+              JSON.stringify(postResults).slice(0, 400),
+          });
+          summary.videos.failed++;
+          summary.videos.results.push({ id: rec.id, error: "max attempts reached", results: postResults });
+        } else {
+          // Some succeeded — retry remaining on next cron tick.
+          const newSpec = { ...spec, pendingPlatforms: stillPending, attemptCount };
+          await updateRecord<VideoFields>("Videos", rec.id, {
+            Status: "partial",
+            "File Path": JSON.stringify(newSpec),
+            Error: JSON.stringify(postResults).slice(0, 500),
+          });
+          summary.videos.skipped++;
+          summary.videos.results.push({
+            id: rec.id,
+            partial: true,
+            pending: stillPending,
+            attemptCount,
+            results: postResults,
+          });
         }
-
-        // Cleanup the MP4 from Blob — both platforms have it now
-        try {
-          await del(spec.blobUrl);
-        } catch {
-          // non-fatal
-        }
-
-        await updateRecord<VideoFields>("Videos", rec.id, {
-          Status: "posted",
-          "Posted ID": postedId,
-          "Posted URL": postedUrl,
-          "Posted At": now.toISOString(),
-        });
-        summary.videos.fired++;
-        summary.videos.results.push({ id: rec.id, results: postResults });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateRecord<VideoFields>("Videos", rec.id, {

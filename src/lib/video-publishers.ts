@@ -11,6 +11,7 @@
  */
 
 import { listRecords, updateRecord } from "@/lib/airtable";
+import { put, del } from "@vercel/blob";
 
 type ConnectionFields = {
   Platform?: string;
@@ -158,9 +159,27 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/**
+ * Duplicate a blob to a fresh URL. IG's fetcher caches failed URLs; re-fetching
+ * from a new URL unsticks the rare transient fetch race.
+ */
+async function freshenBlob(blobUrl: string): Promise<string> {
+  const res = await fetch(blobUrl);
+  if (!res.ok) throw new Error(`blob refetch failed (${res.status})`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  const name = `video-retry-${Date.now()}.mp4`;
+  const fresh = await put(name, buf, {
+    access: "public",
+    addRandomSuffix: false,
+    contentType: "video/mp4",
+  });
+  return fresh.url;
+}
+
 export async function publishVideoToInstagram(
   blobUrl: string,
   caption: string,
+  _retry: boolean = true,
 ): Promise<{ mediaId: string; url: string }> {
   const rec = await getConnection("Instagram");
   const accessToken = rec.fields["Access Token"];
@@ -203,7 +222,29 @@ export async function publishVideoToInstagram(
     const statusData = await statusRes.json();
     if (statusData.status_code === "FINISHED") break;
     if (statusData.status_code === "ERROR") {
-      const msg = statusData.error_message || statusData.status || "unknown";
+      const msg = (statusData.error_message || statusData.status || "unknown") as string;
+      const isFetchFailure =
+        /fetch|download|404/i.test(msg);
+      // Transient IG fetcher race — re-upload to a new URL and retry once.
+      if (_retry && isFetchFailure) {
+        try {
+          const freshUrl = await freshenBlob(blobUrl);
+          try {
+            const out = await publishVideoToInstagram(freshUrl, caption, false);
+            // Best-effort cleanup of the retry blob and the original
+            try { await del(freshUrl); } catch {}
+            try { await del(blobUrl); } catch {}
+            return out;
+          } catch (retryErr) {
+            try { await del(freshUrl); } catch {}
+            throw retryErr;
+          }
+        } catch (freshenErr) {
+          throw new Error(
+            `Instagram container processing failed: ${msg} (retry failed: ${freshenErr instanceof Error ? freshenErr.message : String(freshenErr)})`,
+          );
+        }
+      }
       throw new Error(`Instagram container processing failed: ${msg}`);
     }
   }
