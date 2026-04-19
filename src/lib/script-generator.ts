@@ -141,7 +141,7 @@ Each tweet ≤ 280 chars. Don't number them in the body. Don't use hashtags unle
 
 For tweets #1 (tool_of_day), #2 (quick_tip), #4 (fact), and #5 (repurposed_hook): end the tweet with a blank line followed by exactly:
 
-  Follow for more AI tools you should know.
+  Follow for more AI tools and tips.
 
 Do NOT add this CTA to tweet #3 (engagement) — that one is asking for replies and the CTA dilutes the prompt. Make sure the body + CTA stays within 280 chars; trim the body if needed (the CTA + blank line takes ~45 chars).
 

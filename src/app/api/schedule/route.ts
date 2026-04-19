@@ -11,9 +11,14 @@ type VideoFields = {
   "File Path"?: string;
   Status?: string;
   "Scheduled Date"?: string;
+  "Scheduled Time"?: string;
   Platform?: string[];
   Views?: number;
   "Theme Tag"?: string;
+  "Posted ID"?: string;
+  "Posted URL"?: string;
+  "Posted At"?: string;
+  Error?: string;
 };
 
 /**
@@ -30,13 +35,21 @@ export async function GET() {
       recordedDate: r.fields["Recorded Date"] || "",
       status: r.fields.Status || "",
       scheduledDate: r.fields["Scheduled Date"] || "",
+      scheduledTime: r.fields["Scheduled Time"] || "",
       platforms: r.fields.Platform || [],
       views: r.fields.Views || 0,
       themeTag: r.fields["Theme Tag"] || "",
+      postedUrl: r.fields["Posted URL"] || "",
+      postedAt: r.fields["Posted At"] || "",
+      error: r.fields.Error || "",
     }));
 
-    // Sort by scheduled date
-    videos.sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+    // Sort by scheduled datetime (prefer ISO Scheduled Time), fall back to date
+    videos.sort((a, b) => {
+      const aKey = a.scheduledTime || a.scheduledDate;
+      const bKey = b.scheduledTime || b.scheduledDate;
+      return aKey.localeCompare(bKey);
+    });
 
     return NextResponse.json({ videos });
   } catch (err: unknown) {

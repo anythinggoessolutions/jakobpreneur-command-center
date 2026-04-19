@@ -27,7 +27,26 @@ function PublishingContent() {
   const [xStatus, setXStatus] = useState<PlatformStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
-  const [scheduledVideos, setScheduledVideos] = useState<{id: string; toolName: string; partNumber: number; status: string; scheduledDate: string; platforms: string[]}[]>([]);
+  const [scheduledVideos, setScheduledVideos] = useState<{
+    id: string;
+    toolName: string;
+    partNumber: number;
+    status: string;
+    scheduledDate: string;
+    scheduledTime: string;
+    platforms: string[];
+    postedUrl: string;
+    error: string;
+    themeTag: string;
+  }[]>([]);
+  const [tweets, setTweets] = useState<{
+    scheduled: { id: string; text: string; scheduledTime: string; type: string }[];
+    posted: { id: string; text: string; postedAt: string; tweetUrl: string }[];
+    failed: { id: string; text: string; error: string; scheduledTime: string }[];
+  }>({ scheduled: [], posted: [], failed: [] });
+  const [firing, setFiring] = useState(false);
+  const [fireResult, setFireResult] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   const connectedParam = searchParams.get("connected");
@@ -36,6 +55,7 @@ function PublishingContent() {
   useEffect(() => {
     loadStatus();
     loadSchedule();
+    loadTweets();
     // Clear URL params after 3 seconds so error/success banners don't persist on refresh
     if (connectedParam || errorParam) {
       const timer = setTimeout(() => {
@@ -94,11 +114,66 @@ function PublishingContent() {
 
   const loadSchedule = async () => {
     try {
-      const res = await fetch("/api/schedule");
+      const res = await fetch("/api/schedule", { cache: "no-store" });
       const data = await res.json();
       if (data.videos) setScheduledVideos(data.videos);
     } catch {
       // ignore
+    }
+  };
+
+  const loadTweets = async () => {
+    try {
+      const res = await fetch("/api/tweets/list", { cache: "no-store" });
+      const data = await res.json();
+      setTweets({
+        scheduled: data.scheduled || [],
+        posted: data.posted || [],
+        failed: data.failed || [],
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleFireNow = async () => {
+    if (firing) return;
+    setFiring(true);
+    setFireResult(null);
+    try {
+      const res = await fetch("/api/cron/run", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setFireResult(data.error || `HTTP ${res.status}`);
+      } else {
+        const v = data.videos || { fired: 0, failed: 0, skipped: 0 };
+        const c = data.carousels || { fired: 0, failed: 0, skipped: 0 };
+        const t = data.tweets || { fired: 0, failed: 0, skipped: 0 };
+        setFireResult(
+          `fired — videos: ${v.fired}/${v.fired + v.failed + v.skipped}, carousels: ${c.fired}/${c.fired + c.failed + c.skipped}, tweets: ${t.fired}/${t.fired + t.failed + t.skipped}`,
+        );
+      }
+      // Refresh both lists so UI reflects the cron results
+      await Promise.all([loadSchedule(), loadTweets()]);
+    } catch (err) {
+      setFireResult(err instanceof Error ? err.message : String(err));
+    } finally {
+      setFiring(false);
+    }
+  };
+
+  const handleRetry = async (id: string) => {
+    if (retryingId) return;
+    setRetryingId(id);
+    try {
+      const res = await fetch(`/api/videos/${id}/retry`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert("Retry failed: " + (data.error || res.status));
+      }
+      await loadSchedule();
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -248,44 +323,158 @@ function PublishingContent() {
 
       {/* Scheduled Queue */}
       <div className="mt-10">
-        <h2 className="text-lg font-bold text-zinc-900 mb-1">Publishing Queue</h2>
-        <p className="text-sm text-zinc-500 mb-4">
-          Videos auto-schedule to the next available slot (9am, 1pm, or 7pm EST, max 3/day).
-        </p>
+        <div className="flex items-start justify-between mb-1 gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900">Publishing Queue</h2>
+            <p className="text-sm text-zinc-500">
+              Videos auto-schedule to the next available slot (9am, 1pm, or 7pm EDT, max 3/day).
+            </p>
+          </div>
+          <button
+            onClick={handleFireNow}
+            disabled={firing}
+            className="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:bg-zinc-100 disabled:text-zinc-400 text-zinc-700 cursor-pointer"
+            title="Manually trigger the fire-due cron for anything overdue"
+          >
+            {firing ? "Firing…" : "Fire due now"}
+          </button>
+        </div>
+        {fireResult && (
+          <p className="text-xs text-zinc-500 mb-3 mt-1">{fireResult}</p>
+        )}
+        <div className="mb-4" />
 
         {scheduledVideos.length === 0 ? (
           <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-8 text-center">
-            <p className="text-zinc-400 text-sm">No videos scheduled yet. Record a video from the Content tab and hit Complete.</p>
+            <p className="text-zinc-400 text-sm">No videos scheduled yet. Record a video from the Content tab and hit Schedule.</p>
           </div>
         ) : (
           <div className="space-y-2">
             {scheduledVideos.map((v, i) => {
-              const dateObj = v.scheduledDate ? new Date(v.scheduledDate + "T12:00:00") : null;
-              const dateLabel = dateObj ? dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "Unscheduled";
+              const dateObj = v.scheduledTime
+                ? new Date(v.scheduledTime)
+                : v.scheduledDate
+                  ? new Date(v.scheduledDate + "T12:00:00")
+                  : null;
+              const dateLabel = dateObj
+                ? dateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+                : "Unscheduled";
+              const timeLabel = v.scheduledTime && dateObj
+                ? dateObj.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " EDT"
+                : null;
               const statusColors: Record<string, string> = {
                 scheduled: "bg-blue-100 text-blue-700",
                 posted: "bg-green-100 text-green-700",
                 failed: "bg-red-100 text-red-700",
+                partial: "bg-orange-100 text-orange-700",
                 recorded: "bg-amber-100 text-amber-700",
               };
+              const isRetryable = v.status === "failed" || v.status === "partial";
+              const isCarousel = v.themeTag === "carousel";
+              const displayName = v.toolName.replace(/^\[Carousel\]\s*/, "");
               return (
-                <div key={v.id} className="bg-white rounded-lg border border-zinc-200 px-4 py-3 flex items-center gap-4">
-                  <div className="text-zinc-300 font-mono text-sm w-6 text-center shrink-0">{i + 1}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900">{v.toolName}</span>
-                      {v.partNumber > 0 && <span className="text-xs text-zinc-400">Pt. {v.partNumber}</span>}
+                <div key={v.id} className="bg-white rounded-lg border border-zinc-200 px-4 py-3">
+                  <div className="flex items-center gap-4">
+                    <div className="text-zinc-300 font-mono text-sm w-6 text-center shrink-0">{i + 1}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isCarousel && (
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded">
+                            Carousel
+                          </span>
+                        )}
+                        <span className="text-sm font-semibold text-zinc-900">{displayName}</span>
+                        {v.partNumber > 0 && <span className="text-xs text-zinc-400">Pt. {v.partNumber}</span>}
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {dateLabel}{timeLabel ? `, ${timeLabel}` : ""} &middot; {(v.platforms || []).join(", ")}
+                      </div>
                     </div>
-                    <div className="text-xs text-zinc-400 mt-0.5">
-                      {dateLabel} &middot; {(v.platforms || []).join(", ")}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {v.postedUrl && (
+                        <a
+                          href={v.postedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] font-medium text-zinc-500 hover:text-zinc-900 underline"
+                        >
+                          View post →
+                        </a>
+                      )}
+                      {isRetryable && (
+                        <button
+                          onClick={() => handleRetry(v.id)}
+                          disabled={retryingId === v.id}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 disabled:bg-zinc-100 disabled:text-zinc-400 text-zinc-700 cursor-pointer"
+                        >
+                          {retryingId === v.id ? "…" : "Retry"}
+                        </button>
+                      )}
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColors[v.status] || "bg-zinc-100 text-zinc-600"}`}>
+                        {v.status}
+                      </span>
                     </div>
                   </div>
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColors[v.status] || "bg-zinc-100 text-zinc-600"}`}>
-                    {v.status}
-                  </span>
+                  {v.error && (v.status === "failed" || v.status === "partial") && (
+                    <div className="mt-2 ml-10 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1 font-mono break-all">
+                      {v.error.slice(0, 300)}
+                    </div>
+                  )}
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Tweets */}
+      <div className="mt-10">
+        <div className="flex items-start justify-between mb-4 gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900">Tweets</h2>
+            <p className="text-sm text-zinc-500">
+              {tweets.scheduled.length} upcoming &middot; {tweets.posted.length} recent
+              {tweets.failed.length > 0 && ` · ${tweets.failed.length} failed`}
+            </p>
+          </div>
+        </div>
+
+        {tweets.scheduled.length === 0 && tweets.posted.length === 0 && tweets.failed.length === 0 ? (
+          <div className="bg-zinc-50 rounded-xl border border-zinc-200 p-8 text-center">
+            <p className="text-zinc-400 text-sm">No tweets scheduled yet. Publish a video to auto-queue 5 tweets across the day.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {tweets.failed.map((t) => (
+              <TweetRow
+                key={t.id}
+                text={t.text}
+                when={t.scheduledTime}
+                whenLabel="scheduled"
+                status="failed"
+                extra={t.error}
+              />
+            ))}
+            {tweets.scheduled.map((t) => (
+              <TweetRow
+                key={t.id}
+                text={t.text}
+                when={t.scheduledTime}
+                whenLabel="scheduled"
+                status="scheduled"
+                extra={t.type}
+              />
+            ))}
+            {tweets.posted.map((t) => (
+              <TweetRow
+                key={t.id}
+                text={t.text}
+                when={t.postedAt}
+                whenLabel="posted"
+                status="posted"
+                url={t.tweetUrl}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -384,6 +573,47 @@ function PlatformCard({
           <div className="ml-auto">
             <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">Ready to publish</span>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TweetRow({ text, when, whenLabel, status, url, extra }: { text: string; when: string; whenLabel: "scheduled" | "posted"; status: "scheduled" | "posted" | "failed"; url?: string; extra?: string }) {
+  const d = when ? new Date(when) : null;
+  const dateLabel = d
+    ? d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" })
+    : "—";
+  const timeLabel = d
+    ? d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }) + " EDT"
+    : "";
+  const statusColors: Record<string, string> = {
+    scheduled: "bg-blue-100 text-blue-700",
+    posted: "bg-green-100 text-green-700",
+    failed: "bg-red-100 text-red-700",
+  };
+  return (
+    <div className="bg-white rounded-lg border border-zinc-200 px-4 py-3">
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-zinc-800 line-clamp-2 whitespace-pre-wrap">{text}</div>
+          <div className="text-xs text-zinc-400 mt-1">
+            {whenLabel === "posted" ? "Posted" : "Scheduled"} {dateLabel}{timeLabel ? `, ${timeLabel}` : ""}
+            {extra && whenLabel !== "posted" ? ` · ${extra}` : ""}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {url && (
+            <a href={url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-medium text-zinc-500 hover:text-zinc-900 underline">
+              View →
+            </a>
+          )}
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${statusColors[status]}`}>{status}</span>
+        </div>
+      </div>
+      {status === "failed" && extra && (
+        <div className="mt-2 text-[11px] text-red-600 bg-red-50 border border-red-100 rounded px-2 py-1 font-mono break-all">
+          {extra.slice(0, 300)}
         </div>
       )}
     </div>
