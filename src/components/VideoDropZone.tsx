@@ -207,7 +207,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
   };
 
   const [publishing, setPublishing] = useState(false);
-  const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string }> | null>(null);
+  const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string; scheduled?: boolean; scheduledDate?: string; scheduledTime?: string; scheduledDatetime?: string; platforms?: string[] }> | null>(null);
   const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram"]));
 
   const togglePlatform = (p: string) => {
@@ -221,7 +221,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
 
   const handlePublish = async () => {
     if (!currentJob?.id || !publishPayload) return;
-    if (!confirm(`Publish to ${Array.from(selectedPlatforms).join(", ")}? This is LIVE and cannot be undone.`)) return;
+    if (!confirm(`Schedule for ${Array.from(selectedPlatforms).join(", ")}? Videos post at the next open 9am/1pm/7pm EDT slot.`)) return;
     setPublishing(true);
     try {
       const formData = new FormData();
@@ -240,7 +240,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
       const data = await res.json();
       setPublishResults(data.results || {});
     } catch (err) {
-      alert("Publish failed: " + (err instanceof Error ? err.message : String(err)));
+      alert("Schedule failed: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setPublishing(false);
     }
@@ -356,25 +356,41 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
 
           {publishResults ? (
             <div className="space-y-2 mb-4">
-              {Object.entries(publishResults).map(([platform, result]) => (
-                <div key={platform} className={`px-3 py-2 rounded-lg border text-xs ${
-                  result.success ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold">{result.success ? "✓" : "✗"} {platform.toUpperCase()}</span>
-                    {result.url && (
-                      <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline">
-                        View post →
-                      </a>
-                    )}
+              {Object.entries(publishResults).map(([key, result]) => {
+                const label =
+                  key === "video"
+                    ? `Video → ${(result.platforms || []).join(" + ") || "—"}`
+                    : key === "x"
+                      ? "Tweets (X)"
+                      : key === "carousel"
+                        ? "Carousel → Instagram"
+                        : key.toUpperCase();
+                const slotLabel = result.scheduled
+                  ? result.scheduledDate && result.scheduledTime
+                    ? `Scheduled ${result.scheduledDate} at ${result.scheduledTime} EDT`
+                    : "Scheduled"
+                  : null;
+                return (
+                  <div key={key} className={`px-3 py-2 rounded-lg border text-xs ${
+                    result.success ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold">{result.success ? "✓" : "✗"} {label}</span>
+                      {result.url && (
+                        <a href={result.url} target="_blank" rel="noopener noreferrer" className="underline">
+                          View post →
+                        </a>
+                      )}
+                    </div>
+                    {slotLabel && <div className="text-[11px] mt-1 opacity-80">{slotLabel}</div>}
+                    {result.error && <div className="text-[11px] mt-1 opacity-80">{result.error.slice(0, 120)}</div>}
                   </div>
-                  {result.error && <div className="text-[11px] mt-1 opacity-80">{result.error.slice(0, 120)}</div>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : publishPayload ? (
             <>
-              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Publish to:</p>
+              <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Schedule to:</p>
               <div className="flex gap-2 mb-3 flex-wrap">
                 {[
                   { key: "youtube", label: "YouTube", color: "red" },
@@ -407,7 +423,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                 disabled={publishing || selectedPlatforms.size === 0}
                 className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-sm font-semibold rounded-lg cursor-pointer"
               >
-                {publishing ? "Publishing..." : "Publish Live"}
+                {publishing ? "Scheduling…" : "Schedule"}
               </button>
             )}
             <button onClick={clearAll} className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg cursor-pointer">

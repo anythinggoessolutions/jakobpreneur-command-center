@@ -295,10 +295,10 @@ function PublishingContent() {
         <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em] mb-3">How Publishing Works</h3>
         <div className="space-y-2 text-sm text-zinc-600">
           <p>1. <strong>Connect</strong> your platform accounts above</p>
-          <p>2. <strong>Drop</strong> a recording in the Content tab and hit <strong>Publish Live</strong></p>
-          <p>3. The Mac pipeline processes the video, uploads to YouTube + Instagram, and queues 5 tweets to Airtable across the day (9am / 12pm / 3pm / 6pm / 9pm EST)</p>
-          <p>4. A carousel is auto-scheduled to the next 9am / 1pm / 7pm EST video slot</p>
-          <p>5. A <strong>Vercel cron</strong> fires every 5 minutes — when a tweet or carousel hits its scheduled time, it posts automatically</p>
+          <p>2. <strong>Drop</strong> a recording in the Content tab and hit <strong>Schedule</strong></p>
+          <p>3. The Mac pipeline processes the video, uploads the MP4 to Vercel Blob, and schedules it to the next open 9am / 1pm / 7pm EDT slot</p>
+          <p>4. Tweets (5/day across 9am / 12pm / 3pm / 6pm / 9pm EDT) and a carousel slot are scheduled at the same time</p>
+          <p>5. A <strong>Vercel cron</strong> fires every 5 minutes — when a video, tweet, or carousel hits its slot, it posts automatically</p>
         </div>
       </div>
     </div>

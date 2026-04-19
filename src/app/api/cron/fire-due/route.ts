@@ -3,6 +3,10 @@ import { listRecords, updateRecord } from "@/lib/airtable";
 import { postTweet } from "@/lib/twitter-api";
 import { renderCarousel } from "@/lib/carousel-renderer";
 import { put, del } from "@vercel/blob";
+import {
+  publishVideoToYouTube,
+  publishVideoToInstagram,
+} from "@/lib/video-publishers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,6 +67,7 @@ export async function GET(req: NextRequest) {
   const summary = {
     tweets: { fired: 0, failed: 0, skipped: 0, results: [] as unknown[] },
     carousels: { fired: 0, failed: 0, skipped: 0, results: [] as unknown[] },
+    videos: { fired: 0, failed: 0, skipped: 0, results: [] as unknown[] },
   };
 
   // ---------- Tweets ----------
@@ -264,6 +269,111 @@ export async function GET(req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     summary.carousels.results.push({ fatal: msg });
+  }
+
+  // ---------- Videos ----------
+  try {
+    const videoRecords = await listRecords<VideoFields>("Videos");
+    const dueVideos = videoRecords.filter((r) => {
+      if (r.fields["Theme Tag"] !== "video") return false;
+      if (r.fields.Status !== "scheduled") return false;
+      const scheduled = r.fields["Scheduled Time"];
+      if (!scheduled) return false;
+      return new Date(scheduled) <= now;
+    });
+
+    for (const rec of dueVideos) {
+      try {
+        const specJson = rec.fields["File Path"] || "";
+        if (!specJson) throw new Error("missing video spec in File Path");
+        const spec = JSON.parse(specJson) as {
+          blobUrl?: string;
+          ytTitle?: string;
+          ytDescription?: string;
+          platforms?: string[];
+        };
+        if (!spec.blobUrl) throw new Error("spec missing blobUrl");
+
+        const platforms = spec.platforms || [];
+        const postResults: Record<string, unknown> = {};
+        let postedUrl = "";
+        let postedId = "";
+
+        // YouTube
+        if (platforms.includes("YouTube")) {
+          try {
+            const yt = await publishVideoToYouTube(
+              spec.blobUrl,
+              spec.ytTitle || rec.fields["Tool Name"] || "",
+              spec.ytDescription || "",
+            );
+            postResults.youtube = { success: true, ...yt };
+            if (yt.url) {
+              postedUrl = yt.url;
+              postedId = yt.videoId;
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            postResults.youtube = { success: false, error: msg };
+          }
+        }
+
+        // Instagram
+        if (platforms.includes("Instagram")) {
+          try {
+            const ig = await publishVideoToInstagram(
+              spec.blobUrl,
+              rec.fields["IG Caption"] || "",
+            );
+            postResults.instagram = { success: true, ...ig };
+            if (!postedUrl && ig.url) {
+              postedUrl = ig.url;
+              postedId = ig.mediaId;
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            postResults.instagram = { success: false, error: msg };
+          }
+        }
+
+        // Fail the whole record only if every requested platform failed
+        const anySuccess = Object.values(postResults).some(
+          (v) => (v as { success?: boolean }).success === true,
+        );
+        if (!anySuccess) {
+          throw new Error(
+            "all platforms failed: " + JSON.stringify(postResults).slice(0, 400),
+          );
+        }
+
+        // Cleanup the MP4 from Blob — both platforms have it now
+        try {
+          await del(spec.blobUrl);
+        } catch {
+          // non-fatal
+        }
+
+        await updateRecord<VideoFields>("Videos", rec.id, {
+          Status: "posted",
+          "Posted ID": postedId,
+          "Posted URL": postedUrl,
+          "Posted At": now.toISOString(),
+        });
+        summary.videos.fired++;
+        summary.videos.results.push({ id: rec.id, results: postResults });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        await updateRecord<VideoFields>("Videos", rec.id, {
+          Status: "failed",
+          Error: msg.slice(0, 500),
+        });
+        summary.videos.failed++;
+        summary.videos.results.push({ id: rec.id, error: msg });
+      }
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    summary.videos.results.push({ fatal: msg });
   }
 
   return NextResponse.json({ ranAt: now.toISOString(), ...summary });
