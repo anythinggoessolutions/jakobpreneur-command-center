@@ -81,13 +81,19 @@ Total length under 30 seconds.
 
 # HOOK TEMPLATES
 
-**A — Curiosity:** "Nobody talks about this… but you need to see it. [Surprising fact about an AI tool as a statement]."
+**A — Curiosity:** "Nobody talks about this… but you need to see it." (verbatim, nothing else — no trailing fact)
 **B — Series:** Two acceptable variants — pick whichever fits the tool:
-  - "@jakobpreneur: Powerful AI Tools You Should Know. Part [number]. If you go to this website, you can [primary benefit]." (use for AI software, SaaS, apps)
-  - "@jakobpreneur: Powerful Websites You Should Know. Part [number]. If you go to this website, you can [primary benefit]." (use when the thing is primarily a browser-based website experience)
-**C — Bold Claim:** "[Provocative statement about AI or productivity]. [Surprising result or consequence as a statement]."
+  - "@jakobpreneur: Powerful AI Tools You Should Know. Part [number]." (use for AI software, SaaS, apps)
+  - "@jakobpreneur: Powerful Websites You Should Know. Part [number]." (use when the thing is primarily a browser-based website experience)
+**C — Bold Claim:** "[One provocative statement about AI or productivity]." (just the claim — one sentence, nothing else)
 
-HARD RULE: "Did you know" belongs ONLY in the bridge. Never use it in the hook. The hook states the surprise as a declarative fact; the bridge asks the question. Two back-to-back "Did you know"s is a bug, not a style.
+HARD RULE — THE HOOK IS JUST THE HOOK:
+- The hook is ONLY the bare template phrase above. Do NOT append any fact, tool name, or setup sentence.
+- The BRIDGE carries all the setup ("Did you know if you go to…") and names the tool or action.
+- "Did you know" belongs ONLY in the bridge. Never in the hook.
+- Wrong (Hook A): "Nobody talks about this… but you need to see it. ChatGPT now has group chats." ← fact after hook is wrong
+- Right (Hook A): "Nobody talks about this… but you need to see it." ← hook ends there
+- Then bridge: "Did you know if you go to ChatGPT, you can start a group chat with up to 20 people?"
 
 # HOOK TYPE RULES (mandatory — skill enforces this)
 
