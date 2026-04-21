@@ -426,6 +426,18 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                 {publishing ? "Scheduling…" : "Schedule"}
               </button>
             )}
+            {/* Retry button when Schedule failed on at least one surface.
+                Re-uses the same processed job (currentJob) so the video
+                doesn't re-process from scratch. */}
+            {publishPayload && publishResults && Object.values(publishResults).some((r) => !r.success) && (
+              <button
+                onClick={() => { setPublishResults(null); handlePublish(); }}
+                disabled={publishing || selectedPlatforms.size === 0}
+                className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-sm font-semibold rounded-lg cursor-pointer"
+              >
+                {publishing ? "Retrying…" : "Retry Schedule"}
+              </button>
+            )}
             <button onClick={clearAll} className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 text-sm font-medium rounded-lg cursor-pointer">
               Reset
             </button>
