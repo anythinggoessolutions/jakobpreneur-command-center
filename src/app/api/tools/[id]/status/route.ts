@@ -47,11 +47,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const updated = await updateRecord<ToolFields>("Tools", id, fields);
 
-    // After a reject, repack the remaining queued part numbers so the
-    // series stays sequential (per user request: "if I choose not this
-    // one, the numbers of the videos should be correct").
+    // After any status change that removes a tool from the queue (reject
+    // or record), repack the remaining queued part numbers so the series
+    // stays sequential. Without this, after you record Part 1 the next
+    // queued tool could still show Part 3, skipping a number.
     let compactSummary = null;
-    if (status === "rejected") {
+    if (status === "rejected" || status === "recorded") {
       try {
         compactSummary = await compactQueuedPartNumbers();
       } catch (err) {

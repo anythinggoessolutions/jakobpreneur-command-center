@@ -24,6 +24,7 @@ type ToolFields = {
   Status?: string;
   "Part Number"?: number;
   "Hook Type"?: string;
+  "Relevance Score"?: number;
 };
 
 type ScriptFields = {
@@ -69,16 +70,18 @@ export async function compactQueuedPartNumbers(): Promise<CompactResult> {
   let skipped = 0;
   let scriptsUpdated = 0;
 
-  // 1) Renumber queued Hook B tools sequentially after the sacred max.
-  //    Stable sort: preserve current part number order so the queue feels
-  //    consistent across compact runs.
+  // 1) Renumber queued Hook B tools in the same order the UI displays the
+  //    queue (relevance score DESC, then existing part ASC as a tiebreaker).
+  //    This way Part N matches the order the user will actually record —
+  //    the first tool they pick up gets the next sequential Part.
   const queuedHookB = tools
     .filter((r) => r.fields.Status === "queued")
     .filter(isHookB)
-    .sort(
-      (a, b) =>
-        (a.fields["Part Number"] || 0) - (b.fields["Part Number"] || 0),
-    );
+    .sort((a, b) => {
+      const scoreDiff = (b.fields["Relevance Score"] || 0) - (a.fields["Relevance Score"] || 0);
+      if (scoreDiff !== 0) return scoreDiff;
+      return (a.fields["Part Number"] || 0) - (b.fields["Part Number"] || 0);
+    });
 
   let nextPart = sacredMax + 1;
   for (const t of queuedHookB) {

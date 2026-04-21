@@ -176,5 +176,18 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
     out.fatal = msg;
   }
 
+  // Always compact at the end of a discovery run. Discovery reserves part
+  // numbers optimistically but new tools may have higher relevance scores
+  // than existing queued ones; compact re-sequences everything by queue
+  // display order so Part N always matches record-order.
+  if (out.persisted > 0) {
+    try {
+      const { compactQueuedPartNumbers } = await import("./part-numbers");
+      await compactQueuedPartNumbers();
+    } catch (err) {
+      console.error("post-discovery compact failed:", err);
+    }
+  }
+
   return out;
 }
