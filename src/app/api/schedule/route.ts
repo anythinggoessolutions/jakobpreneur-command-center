@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listRecords, createRecord } from "@/lib/airtable";
 import { findNextAvailableSlot, PLATFORMS_PER_VIDEO } from "@/lib/scheduler";
+import { buildOccupiedSlots } from "@/lib/occupied-slots";
 
 export const dynamic = "force-dynamic";
 
@@ -83,21 +84,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "toolName is required" }, { status: 400 });
     }
 
-    // Get all existing scheduled videos to find occupied slots
+    // Get all existing scheduled videos to find occupied slots — drive
+    // from `Scheduled Time` ISO datetime (see lib/occupied-slots).
     const existing = await listRecords<VideoFields>("Videos");
-    const occupiedSlots = existing
-      .filter((r) => r.fields.Status && r.fields.Status !== "failed")
-      .map((r) => {
-        const date = r.fields["Scheduled Date"] || "";
-        if (!date) return "";
-        // Extract date and time from ISO string
-        const d = new Date(date);
-        const estHour = d.getUTCHours() - 5; // rough EST
-        const dateStr = date.split("T")[0];
-        const timeStr = `${String(estHour >= 0 ? estHour : estHour + 24).padStart(2, "0")}:00`;
-        return `${dateStr}_${timeStr}`;
-      })
-      .filter(Boolean);
+    const occupiedSlots = buildOccupiedSlots(existing);
 
     // Find next available slot
     const slot = findNextAvailableSlot(occupiedSlots);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listRecords, createRecord } from "@/lib/airtable";
 import { findNextAvailableSlot } from "@/lib/scheduler";
+import { buildOccupiedSlots } from "@/lib/occupied-slots";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -64,20 +65,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Occupied slots across all scheduled videos + carousels (they share slots)
+    // Occupied slots across all scheduled videos + carousels (they share
+    // slots) — drive from `Scheduled Time` ISO datetime so slot keys land
+    // correctly. Using date-only collapses every slot on that date.
     const existing = await listRecords<VideoFields>("Videos");
-    const occupiedSlots = existing
-      .filter((r) => r.fields.Status && r.fields.Status !== "failed")
-      .map((r) => {
-        const date = r.fields["Scheduled Date"] || "";
-        if (!date) return "";
-        const d = new Date(date);
-        const estHour = d.getUTCHours() - 5;
-        const dateStr = date.split("T")[0];
-        const timeStr = `${String(estHour >= 0 ? estHour : estHour + 24).padStart(2, "0")}:00`;
-        return `${dateStr}_${timeStr}`;
-      })
-      .filter(Boolean);
+    const occupiedSlots = buildOccupiedSlots(existing);
 
     const slot = findNextAvailableSlot(occupiedSlots);
     const today = new Date().toISOString().split("T")[0];
