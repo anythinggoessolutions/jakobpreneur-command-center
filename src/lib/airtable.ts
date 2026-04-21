@@ -41,7 +41,10 @@ export async function createRecord<T>(table: string, fields: T): Promise<Airtabl
   const res = await fetch(`${AIRTABLE_API}/${baseId()}/${encodeURIComponent(table)}`, {
     method: "POST",
     headers: authHeaders(),
-    body: JSON.stringify({ records: [{ fields }] }),
+    // typecast=true lets Airtable auto-create missing multi-select options
+    // (e.g. "YouTube" on the Videos.Platform column) instead of rejecting
+    // the whole create with INVALID_MULTIPLE_CHOICE_OPTIONS.
+    body: JSON.stringify({ records: [{ fields }], typecast: true }),
   });
   if (!res.ok) throw new Error(`Airtable create failed: ${res.status} ${await res.text()}`);
   const data = await res.json();
@@ -52,7 +55,7 @@ export async function updateRecord<T>(table: string, id: string, fields: Partial
   const res = await fetch(`${AIRTABLE_API}/${baseId()}/${encodeURIComponent(table)}/${id}`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ fields }),
+    body: JSON.stringify({ fields, typecast: true }),
   });
   if (!res.ok) throw new Error(`Airtable update failed: ${res.status} ${await res.text()}`);
   return await res.json();
