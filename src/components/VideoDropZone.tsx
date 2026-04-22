@@ -147,6 +147,12 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
   const clearAll = () => {
     setFiles([]);
     setCurrentJob(null);
+    // CRITICAL: also clear publishResults + publishing. Otherwise the next
+    // video's "complete" state inherits the previous job's success card,
+    // hiding the Schedule button and making it look like the new video
+    // auto-scheduled when actually nothing was sent to Vercel/Airtable.
+    setPublishResults(null);
+    setPublishing(false);
   };
 
   const handleProcess = async () => {
