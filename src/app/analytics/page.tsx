@@ -212,6 +212,78 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Runway — how far ahead content is scheduled */}
+      {(() => {
+        // Count only items with a future or today scheduled date.
+        // America/New_York local day boundary, matches the scheduler's timezone.
+        const todayEst = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/New_York",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date()); // YYYY-MM-DD in EDT
+        const upcoming = videos.filter(
+          (v) =>
+            (v.status === "scheduled" || v.status === "partial") &&
+            v.scheduledDate >= todayEst,
+        );
+        if (upcoming.length === 0) return null;
+        const latestDate = upcoming
+          .map((v) => v.scheduledDate)
+          .sort()
+          .at(-1)!;
+        // Days diff in EDT calendar days.
+        const daysAhead = Math.round(
+          (Date.parse(latestDate + "T12:00:00-04:00") -
+            Date.parse(todayEst + "T12:00:00-04:00")) /
+            (1000 * 60 * 60 * 24),
+        );
+        const distinctDays = new Set(upcoming.map((v) => v.scheduledDate)).size;
+        const latestLabel = new Date(latestDate + "T12:00:00").toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        });
+        const ahead =
+          daysAhead === 0
+            ? "Today only"
+            : daysAhead === 1
+              ? "1 day ahead"
+              : `${daysAhead} days ahead`;
+        return (
+          <div className="mb-6 bg-white rounded-xl border border-zinc-200 p-5 flex items-center gap-6">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-[0.12em]">Runway</div>
+              <div className="mt-1 text-2xl font-bold text-zinc-900">{ahead}</div>
+              <div className="mt-1 text-xs text-zinc-500">
+                {upcoming.length} scheduled · {distinctDays} day{distinctDays === 1 ? "" : "s"} · through {latestLabel}
+              </div>
+            </div>
+            <div className="hidden sm:flex flex-1 gap-1 overflow-hidden justify-end">
+              {/* Compact dot strip: one column per day, one dot per slot. Full = 3 */}
+              {(() => {
+                const byDay: Record<string, number> = {};
+                for (const v of upcoming) byDay[v.scheduledDate] = (byDay[v.scheduledDate] || 0) + 1;
+                const sortedDays = Object.keys(byDay).sort();
+                return sortedDays.slice(0, 14).map((d) => {
+                  const n = byDay[d];
+                  return (
+                    <div key={d} className="flex flex-col items-center gap-0.5" title={`${d}: ${n}/3 slots`}>
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className={`w-2 h-2 rounded-full ${i < n ? "bg-zinc-900" : "bg-zinc-200"}`}
+                        />
+                      ))}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Content Timeline */}
       <h2 className="text-lg font-bold text-zinc-900 mb-4">Content Timeline</h2>
       {videos.length === 0 ? (
