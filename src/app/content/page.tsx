@@ -399,16 +399,14 @@ export default function ContentPage() {
               return (
                 <VideoDropZone
                   seriesText={
-                    currentItem.script.hookType === "B"
-                      // Pull the first line of the generated hook under the
-                      // hook-only-is-hook rule ("…Part N."), then strip the
-                      // spoken "@jakobpreneur: " prefix since it shouldn't
-                      // appear in the burned-in overlay. Supports both
-                      // "Powerful AI Tools…" and "Powerful Websites…" variants.
-                      ? (currentItem.script.hook.split("\n")[0] || "")
-                          .replace(/^@jakobpreneur:\s*/i, "")
-                          .trim()
-                      : undefined
+                    // Send the generated hook as the intro-pill text for
+                    // ALL hook types (A curiosity, B series, C bold claim).
+                    // Matty's style puts a static red pill on every face-cam
+                    // intro, not just series episodes. Strip the spoken
+                    // "@jakobpreneur:" prefix (Hook B) from the overlay.
+                    (currentItem.script.hook.split("\n")[0] || "")
+                      .replace(/^@jakobpreneur:\s*/i, "")
+                      .trim() || undefined
                   }
                   publishPayload={{
                     title: captions.youtubeTitle,
