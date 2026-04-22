@@ -400,7 +400,14 @@ export default function ContentPage() {
                 <VideoDropZone
                   seriesText={
                     currentItem.script.hookType === "B"
-                      ? `POWERFUL AI TOOLS YOU SHOULD KNOW. PART ${currentItem.tool.partNumber}.`
+                      // Pull the first line of the generated hook under the
+                      // hook-only-is-hook rule ("…Part N."), then strip the
+                      // spoken "@jakobpreneur: " prefix since it shouldn't
+                      // appear in the burned-in overlay. Supports both
+                      // "Powerful AI Tools…" and "Powerful Websites…" variants.
+                      ? (currentItem.script.hook.split("\n")[0] || "")
+                          .replace(/^@jakobpreneur:\s*/i, "")
+                          .trim()
                       : undefined
                   }
                   publishPayload={{
