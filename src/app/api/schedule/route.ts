@@ -48,12 +48,18 @@ export async function GET() {
     // Hide `posted` rows older than 24h — the queue should focus on what's
     // upcoming and what needs attention (scheduled, partial, failed always
     // stay visible). Rows without a Posted At fall back to Scheduled Time.
+    // Also hide date-only stub rows (Scheduled Date but no Scheduled Time):
+    // cron fires on Scheduled Time, so a row without one never posts and
+    // is just clutter from the initial "Schedule" click before publish.
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
     const cutoff = Date.now() - ONE_DAY_MS;
     const videos = allVideos.filter((v) => {
-      if (v.status !== "posted") return true;
-      const postedTs = v.postedAt ? Date.parse(v.postedAt) : v.scheduledTime ? Date.parse(v.scheduledTime) : 0;
-      return postedTs >= cutoff;
+      if (v.status === "posted") {
+        const postedTs = v.postedAt ? Date.parse(v.postedAt) : v.scheduledTime ? Date.parse(v.scheduledTime) : 0;
+        return postedTs >= cutoff;
+      }
+      if (v.status === "scheduled" && !v.scheduledTime) return false;
+      return true;
     });
 
     // Sort by scheduled datetime (prefer ISO Scheduled Time), fall back to date
