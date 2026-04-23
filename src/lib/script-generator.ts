@@ -16,8 +16,8 @@ const client = new Anthropic();
 export const ScriptBundleSchema = z.object({
   category: z.string().describe("Tool category (e.g. 'AI Presentations', 'AI Voice', 'Productivity')"),
   description: z.string().describe("One-sentence description of what the tool does."),
-  hookType: z.enum(["A", "B", "C"]).describe(
-    "A=Curiosity ('Nobody talks about this…'), B=Series ('@jakobpreneur: Powerful AI Tools You Should Know. Part N' OR 'Powerful Websites You Should Know'), C=Bold Claim",
+  hookType: z.enum(["A", "B", "C", "D", "E", "F"]).describe(
+    "A=Curiosity ('Nobody talks about this…'), B=Series ('Powerful AI Tools You Should Know. Part N' OR 'Powerful Websites You Should Know'), C=Bold Claim, D=Insider Secret ('Here's a website they don't want you to know about.'), E=Urgency ('Bookmark this before it goes viral.'), F=Replace-It ('Stop using X. Use this instead.')",
   ),
   contentType: z.enum(["unknown_tool", "hidden_feature", "skill_tip"]).describe(
     "unknown_tool=cool small tool (Type 1), hidden_feature=hidden feature of a big tool (Type 2), skill_tip=skill or workflow (Type 3)",
@@ -70,7 +70,7 @@ Your output is consumed by an automated pipeline. You MUST produce a script, 5 t
 # THE FORMULA (mandatory 5-section script structure)
 
 \`\`\`
-HOOK (0-3s)    — Use one of three hook templates (A, B, or C below)
+HOOK (0-3s)    — Use one of six hook templates (A, B, C, D, E, or F below)
 BRIDGE (3-6s)  — "Did you know if you go to this website..."
 BENEFIT (6-8s) — One sentence: what the tool does for the viewer
 DEMO (8-20s)   — Screen recording narration using "You can..." phrases (2-3 features max)
@@ -81,11 +81,22 @@ Total length under 30 seconds.
 
 # HOOK TEMPLATES
 
+We're in a TESTING PHASE — six distinct hooks live at once so we can find the one that drives the most volume. Each uses a different psychological lever. Do NOT collapse them into variations of the same pattern.
+
 **A — Curiosity:** "Nobody talks about this… but you need to see it." (verbatim, nothing else — no trailing fact)
+
 **B — Series:** Two acceptable variants — pick whichever fits the tool:
-  - "@jakobpreneur: Powerful AI Tools You Should Know. Part [number]." (use for AI software, SaaS, apps)
-  - "@jakobpreneur: Powerful Websites You Should Know. Part [number]." (use when the thing is primarily a browser-based website experience)
+  - "Powerful AI Tools You Should Know. Part [number]." (use for AI software, SaaS, apps)
+  - "Powerful Websites You Should Know. Part [number]." (use when the thing is primarily a browser-based website experience)
+  - Do NOT prefix with "@jakobpreneur:" — the handle appears in the on-screen overlay, not the spoken hook.
+
 **C — Bold Claim:** "[One provocative statement about AI or productivity]." (just the claim — one sentence, nothing else)
+
+**D — Insider Secret:** "Here's a website they don't want you to know about." (or "Here's an AI tool they don't want you to know about." when the subject is a tool rather than a site). Verbatim — do not name the tool in the hook. "They" is shorthand for "the mainstream" — don't invent a literal conspiracy.
+
+**E — Urgency:** "Bookmark this before it goes viral." (verbatim). Only use this when the thing is genuinely new or growing fast — don't use it on evergreen/established tools.
+
+**F — Replace-It:** "Stop using [common thing]. Use this instead." The [common thing] must be a specific, widely-used incumbent (e.g. "Google Docs", "Photoshop", "ChatGPT"), not a vague category. Do NOT name the replacement tool in the hook — that's the bridge's job.
 
 HARD RULE — THE HOOK IS JUST THE HOOK:
 - The hook is ONLY the bare template phrase above. Do NOT append any fact, tool name, or setup sentence.
@@ -97,20 +108,23 @@ HARD RULE — THE HOOK IS JUST THE HOOK:
 
 # HOOK TYPE RULES (mandatory — skill enforces this)
 
-If the caller specifies a hookType, USE IT verbatim. Otherwise:
-- contentType: unknown_tool → DEFAULT to **B** (the series hook). NEVER use C.
-- contentType: hidden_feature → ALWAYS **A** (the curiosity hook). NEVER B or C.
-- contentType: skill_tip → DEFAULT to **C** (bold claim). NEVER use B.
+If the caller specifies a hookType, USE IT verbatim. Otherwise pick from the allowed set for the content type — the system wants ROTATION across the menu so no single hook is stuck on one content type:
 
-When using Hook B, the FIRST line of the hook MUST start with one of these two exact prefixes — followed by the "If you go to this website, you can [benefit]" sentence on the next line:
-  - "@jakobpreneur: Powerful AI Tools You Should Know. Part [N]." — for SaaS / apps / software
-  - "@jakobpreneur: Powerful Websites You Should Know. Part [N]." — for browser-based website experiences
+- contentType: unknown_tool → allowed: **A, B, D, E** (default B for the series, but pick A/D/E if they're a stronger fit). NEVER C or F.
+- contentType: hidden_feature → allowed: **A, E** (default A). NEVER B, C, D, or F.
+- contentType: skill_tip → allowed: **C, F** (default C). NEVER B, D, or E.
+
+Bias toward variety — if you recently generated B, try D or E instead. Downstream code rotates across valid choices; do not always pick the default.
+
+When using Hook B, the FIRST line of the hook MUST be one of these two exact phrasings (NO "@jakobpreneur:" prefix) — followed by the "If you go to this website, you can [benefit]" sentence on the next line:
+  - "Powerful AI Tools You Should Know. Part [N]." — for SaaS / apps / software
+  - "Powerful Websites You Should Know. Part [N]." — for browser-based website experiences
 
 # CONTENT TYPES (pick one)
 
-- **unknown_tool (Type 1):** Cool, small, lesser-known tool or website. Lead with what the tool does — the tool itself is the hook. Best hook: B (series) or A (curiosity).
-- **hidden_feature (Type 2):** A specific hidden feature of a well-known tool (ChatGPT, Google, etc.). NEVER explain what the parent tool is — everyone knows. Lead with the surprise. Best hook: A.
-- **skill_tip (Type 3):** Skill, workflow, or use case (e.g. "automate your social media", "3 AI tools that replaced my marketing team"). Lead with the problem or result. Best hook: C or A.
+- **unknown_tool (Type 1):** Cool, small, lesser-known tool or website. Lead with what the tool does — the tool itself is the hook. Best hook: B (series), A (curiosity), D (insider secret), or E (urgency).
+- **hidden_feature (Type 2):** A specific hidden feature of a well-known tool (ChatGPT, Google, etc.). NEVER explain what the parent tool is — everyone knows. Lead with the surprise. Best hook: A (curiosity) or E (urgency).
+- **skill_tip (Type 3):** Skill, workflow, or use case (e.g. "automate your social media", "3 AI tools that replaced my marketing team"). Lead with the problem or result. Best hook: C (bold claim) or F (replace-it).
 
 # DIFFERENTIATION RULE (CRITICAL)
 
@@ -181,7 +195,7 @@ export interface GenerateInput {
   toolName: string;
   toolUrl: string;
   partNumber?: number;
-  hookType?: "A" | "B" | "C";
+  hookType?: "A" | "B" | "C" | "D" | "E" | "F";
   contentType?: "unknown_tool" | "hidden_feature" | "skill_tip";
   reason?: string;
 }

@@ -114,12 +114,26 @@ export function generateCaptions(item: QueuedTool): SocialCaptions {
   // YouTube Shorts title (100 chars max) and description
   // ----------------------------------------------------------------
   let youtubeTitle: string;
-  if (script.hookType === "B") {
-    youtubeTitle = `${tool.name} - AI Tools You Need To Know ${partText} #shorts`;
-  } else if (script.hookType === "A") {
-    youtubeTitle = `I Was Today Years Old When I Found ${tool.name} #shorts`;
-  } else {
-    youtubeTitle = `${tool.name} Will Change How You Work #shorts`;
+  switch (script.hookType) {
+    case "B":
+      youtubeTitle = `${tool.name} - AI Tools You Need To Know ${partText} #shorts`;
+      break;
+    case "A":
+      youtubeTitle = `I Was Today Years Old When I Found ${tool.name} #shorts`;
+      break;
+    case "D":
+      youtubeTitle = `${tool.name} - The Website They Don't Want You To Know About #shorts`;
+      break;
+    case "E":
+      youtubeTitle = `Bookmark ${tool.name} Before It Goes Viral #shorts`;
+      break;
+    case "F":
+      youtubeTitle = `Stop What You're Doing And Use ${tool.name} #shorts`;
+      break;
+    case "C":
+    default:
+      youtubeTitle = `${tool.name} Will Change How You Work #shorts`;
+      break;
   }
   youtubeTitle = youtubeTitle.slice(0, 100);
 

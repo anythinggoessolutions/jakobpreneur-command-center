@@ -2,16 +2,43 @@
 
 import { useState } from "react";
 
+type HookCode = "A" | "B" | "C" | "D" | "E" | "F";
+
 interface AddToolModalProps {
-  onSubmit: (tool: { name: string; url: string; reason: string; hookType: "A" | "B" | "C" }) => void;
+  onSubmit: (tool: { name: string; url: string; reason: string; hookType: HookCode }) => void;
   onCancel: () => void;
 }
+
+// Pre-computed Tailwind class strings per hook color. Tailwind doesn't see
+// dynamic template strings (`bg-${color}-50`) at build time, so we keep an
+// explicit map here — otherwise the classes get purged and selected hooks
+// render with no color.
+const HOOK_COLOR_STYLES: Record<
+  HookCode,
+  { bg: string; border: string; text: string }
+> = {
+  A: { bg: "#fffbeb", border: "#fcd34d", text: "#b45309" },   // amber
+  B: { bg: "#f0fdf4", border: "#86efac", text: "#15803d" },   // green
+  C: { bg: "#faf5ff", border: "#c4b5fd", text: "#7c3aed" },   // purple
+  D: { bg: "#eff6ff", border: "#93c5fd", text: "#1d4ed8" },   // blue
+  E: { bg: "#fef2f2", border: "#fca5a5", text: "#b91c1c" },   // red
+  F: { bg: "#f0f9ff", border: "#7dd3fc", text: "#0369a1" },   // sky
+};
+
+const HOOK_OPTIONS: Array<{ value: HookCode; label: string; desc: string }> = [
+  { value: "B", label: "Series", desc: "Part of the numbered series" },
+  { value: "A", label: "Curiosity", desc: "\"Nobody talks about this…\"" },
+  { value: "C", label: "Bold Claim", desc: "Provocative statement" },
+  { value: "D", label: "Insider", desc: "\"They don't want you to know…\"" },
+  { value: "E", label: "Urgency", desc: "\"Bookmark before it goes viral\"" },
+  { value: "F", label: "Replace-It", desc: "\"Stop using X. Use this instead.\"" },
+];
 
 export default function AddToolModal({ onSubmit, onCancel }: AddToolModalProps) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [reason, setReason] = useState("");
-  const [hookType, setHookType] = useState<"A" | "B" | "C">("B");
+  const [hookType, setHookType] = useState<HookCode>("B");
   const [generating, setGenerating] = useState(false);
 
   const canSubmit = name.trim() && url.trim();
@@ -84,31 +111,35 @@ export default function AddToolModal({ onSubmit, onCancel }: AddToolModalProps) 
             <label className="block text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">
               Hook Type
             </label>
-            <div className="flex gap-2">
-              {([
-                { value: "B" as const, label: "Series", desc: "Part of the numbered series", color: "green" },
-                { value: "A" as const, label: "Curiosity", desc: "\"I was today years old...\"", color: "amber" },
-                { value: "C" as const, label: "Bold Claim", desc: "Provocative statement", color: "purple" },
-              ]).map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setHookType(opt.value)}
-                  className={`flex-1 text-left px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
-                    hookType === opt.value
-                      ? `bg-${opt.color}-50 border-${opt.color}-300 border-2 font-medium text-${opt.color}-700`
-                      : "bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-zinc-300"
-                  }`}
-                  style={hookType === opt.value ? {
-                    backgroundColor: opt.color === "green" ? "#f0fdf4" : opt.color === "amber" ? "#fffbeb" : "#faf5ff",
-                    borderColor: opt.color === "green" ? "#86efac" : opt.color === "amber" ? "#fcd34d" : "#c4b5fd",
-                    borderWidth: "2px",
-                    color: opt.color === "green" ? "#15803d" : opt.color === "amber" ? "#b45309" : "#7c3aed",
-                  } : {}}
-                >
-                  <div className="font-semibold text-xs">{opt.label}</div>
-                  <div className="text-[11px] opacity-70 mt-0.5">{opt.desc}</div>
-                </button>
-              ))}
+            <div className="grid grid-cols-3 gap-2">
+              {HOOK_OPTIONS.map((opt) => {
+                const isActive = hookType === opt.value;
+                const style = HOOK_COLOR_STYLES[opt.value];
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => setHookType(opt.value)}
+                    className={`text-left px-3 py-2.5 rounded-lg text-sm transition-colors cursor-pointer ${
+                      isActive
+                        ? "font-medium border-2"
+                        : "bg-zinc-50 border border-zinc-200 text-zinc-600 hover:border-zinc-300"
+                    }`}
+                    style={
+                      isActive
+                        ? {
+                            backgroundColor: style.bg,
+                            borderColor: style.border,
+                            color: style.text,
+                            borderWidth: "2px",
+                          }
+                        : {}
+                    }
+                  >
+                    <div className="font-semibold text-xs">{opt.label}</div>
+                    <div className="text-[11px] opacity-70 mt-0.5">{opt.desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

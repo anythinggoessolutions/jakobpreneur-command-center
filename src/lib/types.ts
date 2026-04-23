@@ -8,7 +8,7 @@ export interface Tool {
   description: string;
   status: "queued" | "recorded" | "rejected";
   partNumber: number;
-  hookType: "A" | "B" | "C";
+  hookType: "A" | "B" | "C" | "D" | "E" | "F";
   relevanceScore: number;
   rejectionReason?: string;
   recordedDate?: string;
@@ -22,7 +22,7 @@ export interface Script {
   demo: string;
   close: string;
   fullScript: string;
-  hookType: "A" | "B" | "C";
+  hookType: "A" | "B" | "C" | "D" | "E" | "F";
   estimatedSeconds: number;
 }
 

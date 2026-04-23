@@ -6,6 +6,9 @@ const hookColors = {
   A: "bg-amber-400",
   B: "bg-green-500",
   C: "bg-purple-500",
+  D: "bg-blue-500",
+  E: "bg-red-500",
+  F: "bg-sky-500",
 };
 
 interface QueueItemProps {

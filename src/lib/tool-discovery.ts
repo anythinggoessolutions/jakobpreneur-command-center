@@ -29,7 +29,7 @@ export const DiscoveredToolsSchema = z.object({
         category: z.string(),
         description: z.string(),
         contentType: z.enum(["unknown_tool", "hidden_feature", "skill_tip"]),
-        suggestedHookType: z.enum(["A", "B", "C"]),
+        suggestedHookType: z.enum(["A", "B", "C", "D", "E", "F"]),
         relevanceScore: z.number().int().min(1).max(100),
         reasonInteresting: z.string(),
       }),
@@ -59,17 +59,25 @@ After researching, call submit_discovered_tools EXACTLY ONCE with your final pic
 
 # HOOK TYPE RULES (mandatory — skill enforces this)
 
-The hook type MUST match the content type. Pick from the allowed set only:
+We're in a TESTING PHASE with six hooks live at once. The goal: ROTATE across the menu so no single hook is stuck on one content type. Pick from the allowed set only, and VARY your picks across the batch (don't return all B's — mix B, D, E for Type 1, etc.):
 
-- contentType: unknown_tool → suggestedHookType: **B** (default — the series hook) or A. NEVER C.
-- contentType: hidden_feature → suggestedHookType: **A** (always — the curiosity hook). NEVER B or C.
-- contentType: skill_tip → suggestedHookType: C (default) or A. NEVER B.
+- contentType: unknown_tool → allowed: **A, B, D, E**. Default B, but pick D or E regularly to drive variety. NEVER C or F.
+- contentType: hidden_feature → allowed: **A, E**. Default A, pick E when the feature is genuinely new / recently-shipped. NEVER B, C, D, or F.
+- contentType: skill_tip → allowed: **C, F**. Default C, pick F when the skill replaces a specific widely-used incumbent (e.g. "stop using Google Docs"). NEVER B, D, or E.
 
-Default to B for unknown_tool unless A is a clear better fit (e.g. the surprise IS the hook).
+Hook meanings (so you pick the right one, not just a default):
+- **A — Curiosity:** "Nobody talks about this…" — vague intrigue, works anywhere the surprise is the payoff.
+- **B — Series:** "Powerful AI Tools You Should Know. Part N." — series authority, for discovery-style tool features.
+- **C — Bold Claim:** one provocative statement about AI or productivity.
+- **D — Insider Secret:** "Here's a website they don't want you to know about." — conspiratorial / insider framing, great for obscure tools.
+- **E — Urgency:** "Bookmark this before it goes viral." — scarcity + imperative, requires the tool/feature to genuinely be new or fast-growing.
+- **F — Replace-It:** "Stop using [incumbent]. Use this instead." — requires a specific widely-used incumbent the tool displaces.
 
 Hook B has two acceptable phrasings — script generation will pick the right one:
   - "Powerful AI Tools You Should Know, Part [N]" — for AI software, SaaS, apps
   - "Powerful Websites You Should Know, Part [N]" — for browser-based website experiences
+
+**IMPORTANT — variety across batch:** when returning multiple tools in one call, do not give them all the same hook type. Distribute across the allowed set for each content type.
 
 # QUALITY BAR (every tool must hit)
 
@@ -138,8 +146,8 @@ const SUBMIT_TOOLS_SCHEMA: Anthropic.Tool.InputSchema = {
           },
           suggestedHookType: {
             type: "string",
-            enum: ["A", "B", "C"],
-            description: "A=Curiosity, B=Series, C=Bold Claim",
+            enum: ["A", "B", "C", "D", "E", "F"],
+            description: "A=Curiosity, B=Series, C=Bold Claim, D=Insider Secret, E=Urgency, F=Replace-It",
           },
           relevanceScore: {
             type: "integer",
@@ -235,8 +243,10 @@ export async function discoverNewTools(input: DiscoverInput = {}): Promise<Disco
   const parsed = DiscoveredToolsSchema.parse(toolUse.input);
 
   // Defensive enforcement: skill rules constrain hook type by content type.
-  // Even if Claude drifts, normalize here so downstream script generation
-  // gets the correct hook.
+  // If Claude proposes a hook that's outside the allowed set for the
+  // contentType, fall back to that type's default. Otherwise keep Claude's
+  // pick — we want variety across the batch so no hook gets stuck on one
+  // content type.
   parsed.tools = parsed.tools.map((t) => ({
     ...t,
     suggestedHookType: enforceHookType(t.contentType, t.suggestedHookType),
@@ -245,20 +255,26 @@ export async function discoverNewTools(input: DiscoverInput = {}): Promise<Disco
   return parsed;
 }
 
+type HookCode = "A" | "B" | "C" | "D" | "E" | "F";
+
+// Allowed hook types per content type. Kept in sync with the system prompt.
+// Any hook outside the allowed set falls back to the type's default (first).
+const ALLOWED_HOOKS: Record<
+  "unknown_tool" | "hidden_feature" | "skill_tip",
+  HookCode[]
+> = {
+  unknown_tool: ["B", "A", "D", "E"], // default B
+  hidden_feature: ["A", "E"],           // default A
+  skill_tip: ["C", "F"],                // default C
+};
+
 function enforceHookType(
   contentType: "unknown_tool" | "hidden_feature" | "skill_tip",
-  proposed: "A" | "B" | "C",
-): "A" | "B" | "C" {
-  // unknown_tool: B (default) or A. C → B.
-  if (contentType === "unknown_tool") {
-    return proposed === "A" ? "A" : "B";
-  }
-  // hidden_feature: A only.
-  if (contentType === "hidden_feature") {
-    return "A";
-  }
-  // skill_tip: C (default) or A. B → C.
-  return proposed === "A" ? "A" : "C";
+  proposed: HookCode,
+): HookCode {
+  const allowed = ALLOWED_HOOKS[contentType];
+  if (allowed.includes(proposed)) return proposed;
+  return allowed[0];
 }
 
 function buildUserPrompt(count: number, exclude: string[]): string {

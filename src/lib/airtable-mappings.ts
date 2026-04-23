@@ -3,10 +3,15 @@
  * and Scripts tables) and the short codes the UI/app code uses internally.
  */
 
-export const HOOK_TYPE_LABEL: Record<"A" | "B" | "C", string> = {
+export type HookCode = "A" | "B" | "C" | "D" | "E" | "F";
+
+export const HOOK_TYPE_LABEL: Record<HookCode, string> = {
   A: "A - Curiosity",
   B: "B - Series",
   C: "C - Bold Claim",
+  D: "D - Insider Secret",
+  E: "E - Urgency",
+  F: "F - Replace-It",
 };
 
 export const CONTENT_TYPE_LABEL: Record<"unknown_tool" | "hidden_feature" | "skill_tip", string> = {
@@ -20,10 +25,13 @@ export const CAROUSEL_TYPE_LABEL: Record<"famous_person" | "tool_breakdown", str
   tool_breakdown: "Tool Breakdown",
 };
 
-const HOOK_LABEL_TO_CODE: Record<string, "A" | "B" | "C"> = {
+const HOOK_LABEL_TO_CODE: Record<string, HookCode> = {
   "A - Curiosity": "A",
   "B - Series": "B",
   "C - Bold Claim": "C",
+  "D - Insider Secret": "D",
+  "E - Urgency": "E",
+  "F - Replace-It": "F",
 };
 
 const CAROUSEL_LABEL_TO_CODE: Record<string, "famous_person" | "tool_breakdown"> = {
@@ -31,7 +39,7 @@ const CAROUSEL_LABEL_TO_CODE: Record<string, "famous_person" | "tool_breakdown">
   "Tool Breakdown": "tool_breakdown",
 };
 
-export function parseHookType(label: string | undefined): "A" | "B" | "C" {
+export function parseHookType(label: string | undefined): HookCode {
   if (!label) return "B";
   return HOOK_LABEL_TO_CODE[label] ?? "B";
 }

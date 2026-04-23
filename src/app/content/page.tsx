@@ -78,14 +78,17 @@ export default function ContentPage() {
   const queueItems = queue.slice(currentIndex + 1, currentIndex + 6);
   const remainingCount = queue.length - currentIndex;
 
-  const handleAddTool = async (input: { name: string; url: string; reason: string; hookType: "A" | "B" | "C" }) => {
+  const handleAddTool = async (input: { name: string; url: string; reason: string; hookType: "A" | "B" | "C" | "D" | "E" | "F" }) => {
     // Optimistic placeholder while Claude generates and persists to Airtable.
     const tempId = `temp-${Date.now()}`;
     const partNum = queue.length + 1;
-    const placeholderHook: Record<"A" | "B" | "C", string> = {
-      A: `I was today years old when I found this out.\nDid you know ${input.name} can [generating...]?`,
-      B: `@jakobpreneur: Powerful AI Tools You Should Know. Part ${partNum}.\nIf you go to this website, you can [generating...]`,
+    const placeholderHook: Record<"A" | "B" | "C" | "D" | "E" | "F", string> = {
+      A: `Nobody talks about this… but you need to see it.\nDid you know if you go to ${input.name}, you can [generating...]?`,
+      B: `Powerful AI Tools You Should Know. Part ${partNum}.\nIf you go to this website, you can [generating...]`,
       C: `[Generating bold claim about ${input.name}...]\nDid you know if you [action], it'll [result]?`,
+      D: `Here's a website they don't want you to know about.\nIf you go to ${input.name}, you can [generating...]`,
+      E: `Bookmark this before it goes viral.\nIf you go to ${input.name}, you can [generating...]`,
+      F: `Stop using [incumbent]. Use this instead.\nIf you go to ${input.name}, you can [generating...]`,
     };
     const placeholderTool: QueuedTool = {
       tool: {

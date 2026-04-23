@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
     const { name, url, hookType, reason } = body as {
       name?: string;
       url?: string;
-      hookType?: "A" | "B" | "C";
+      hookType?: "A" | "B" | "C" | "D" | "E" | "F";
       reason?: string;
     };
 
