@@ -141,15 +141,34 @@ Lead with what makes the tool *uniquely different*, not its category.
 - Describe the BENEFIT before naming or showing the tool.
 - "Now you know." is the final line. Verbatim. No "and now you know" or "so now you know."
 
-# TWEETS (exactly 5, in this order)
+# TWEETS (exactly 5, in this order) — PUNCHY, MONEY-FORWARD, CLICK-BAITY
 
-1. **tool_of_day** — "Here's [tool/feature]. [What it does]. [URL if appropriate]"
-2. **quick_tip** — A pulled tip, framed as actionable advice
-3. **engagement** — A question to provoke replies
-4. **fact** — A surprising stat or fact
-5. **repurposed_hook** — The video hook re-cast as a standalone tweet
+X's algorithm rewards strong claims, specific numbers, and replies. Informational "here's a tool" tweets die in the feed. Every tweet must use one of these levers — money/ROI, loss aversion, controversy, or a specific shocking number. No neutral summaries.
 
-Each tweet ≤ 280 chars. Don't number them in the body. Don't use hashtags unless naturally embedded.
+1. **tool_of_day** — **Money / ROI framing.** Lead with a concrete dollar figure the viewer can imagine in their own life ("$400/mo manager", "$200/mo software", "$20/mo subscription"). Format: "I [action] after I found this AI. [Specific benefit in one line]. [URL]"
+   - Example: "I canceled my $400/mo social media manager after I found this AI. It plans, writes, and schedules your whole month in 20 minutes. meedro.com"
+
+2. **quick_tip** — **"Stop doing X" imperative.** Starts with "Stop" or another imperative that kills auto-scroll. Calls out a specific thing the viewer is probably paying for or wasting time on. Format: "Stop [current painful thing]. This AI [better outcome] — [price/speed angle]."
+   - Example: "Stop paying a VA to write your captions. This AI learns your brand voice, plans your content calendar, and schedules everything — free tier included."
+
+3. **engagement** — **"Hot take" controversy bait.** Open with "Hot take:" or a similarly loaded frame. Make a claim one side will defend and one side will attack. End with "Change my mind." or a challenge. Format: "Hot take: [provocative claim about the incumbent or status quo]. This AI [specific thing it does]. Change my mind."
+   - Example: "Hot take: every 'social media manager' charging $1k/mo is going to be unemployed in 18 months. This AI already does 90% of their job for free. Change my mind."
+   - **Guardrail:** Attack the *role / incumbent product / status quo*, never individuals or protected groups. "Social media managers are going obsolete" = fine. Anything political, racial, gendered, or targeted at a named person = NEVER.
+
+4. **fact** — **Specific number + loss framing.** Open with a specific stat (real or clearly-plausible inference about the niche), then reframe the status quo as *costing* something. Format: "[Specific stat]. [Reframe as loss — what the reader loses by not using this]."
+   - Example: "Creators using AI schedulers post 3x more and grow 4x faster than ones doing it manually. If you're still scheduling by hand, you're handing the feed to someone else."
+
+5. **repurposed_hook** — **Video hook verbatim, then the tool + concrete benefit.** Lead with the exact hook line from the script, then one sentence of what the tool does with a specific payoff.
+   - Example: "Bookmark this before it goes viral. Meedro AI plans, writes, and schedules your entire month of social content in 20 minutes. meedro.com"
+
+## Tweet rules (apply to all 5)
+
+- Each tweet ≤ 280 chars INCLUDING the CTA on tweets #1/#2/#4/#5.
+- Don't number the tweets in the body.
+- No hashtags unless naturally embedded in a sentence.
+- Use specific numbers whenever plausible ($400/mo, 20 minutes, 3x faster, 90%). Round numbers with no basis ("thousands of users") die.
+- Never fabricate precise claims about private companies ("MrBeast uses X" is banned — see carousel rule below). Dollar figures for generic roles/subscriptions (VA costs $400/mo, ChatGPT is $20/mo) are fine because they're industry-standard.
+- Inline URLs are fine in tool_of_day and repurposed_hook — put them at the end of the line before the CTA blank line.
 
 # TWEET CTA RULE (mandatory)
 
