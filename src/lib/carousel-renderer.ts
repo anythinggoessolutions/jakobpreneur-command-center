@@ -231,8 +231,10 @@ function renderFinalSlide(
     ctx.fillText(line, (WIDTH - w) / 2, blockStartY + i * lineHeight);
   });
 
-  // Follow CTA in green pill — placed below the text block
-  const cta = "FOLLOW @JAKOBPRENEUR";
+  // Handle pill — placed below the big CTA text. The "FOLLOW" word lives
+  // in the big text above, so the pill is just the handle — otherwise the
+  // slide reads "FOLLOW FOR X / FOLLOW @JAKOBPRENEUR" which is awkward.
+  const cta = "@JAKOBPRENEUR";
   ctx.font = "bold 54px Inter";
   const ctaW = ctx.measureText(cta).width + 80;
   const ctaH = 110;
@@ -298,17 +300,11 @@ async function fetchImageByUrl(url: string | undefined | null): Promise<Image | 
   }
 }
 
+// Final-slide CTA rotation. The spoken "FOLLOW" lives here; the handle pill
+// below just shows the @jakobpreneur handle so the viewer knows WHO to follow.
 const MOTIVATIONAL_CLOSERS = [
-  "MILLIONS OF PEOPLE\nTAKE ACTION EVERY DAY.\nWHY NOT YOU?",
-  "YOU HAVE\nTHE TOOLS.\nYOU HAVE\nTHE TIME.\nWHAT ELSE\nDO YOU NEED?",
-  "EVERY EXPERT\nWAS ONCE\nA BEGINNER\nWHO REFUSED\nTO QUIT.",
-  "THE GAP BETWEEN\nDREAMING AND DOING\nIS ONE DECISION.\nMAKE IT TODAY.",
-  "SOMEONE LESS\nQUALIFIED THAN YOU\nIS DOING IT RIGHT NOW.\nGO GET YOURS.",
-  "STOP CONSUMING.\nSTART CREATING.\nTHE WORLD\nIS WAITING.",
-  "YOU DON'T NEED\nANOTHER COURSE.\nYOU NEED\nONE HOUR\nOF DOING.",
-  "THE BEST TIME\nTO START\nWAS YESTERDAY.\nTHE SECOND BEST\nIS NOW.",
-  "OPPORTUNITY\nSHOWS UP\nDISGUISED AS WORK.\nSHOW UP ANYWAY.",
-  "EVERY SCROLL\nIS A CHOICE\nTO STAY WHERE\nYOU ARE.\nCHOOSE DIFFERENTLY.",
+  "FOLLOW FOR\nAI TOOLS,\nTIPS &\nTRICKS.",
+  "FOLLOW FOR\nTHE AI\nEDGE.",
 ];
 
 /**
