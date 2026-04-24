@@ -15,19 +15,20 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { headline, slides, toolName, carouselType, closingText } = body;
+    const { headline, slides, toolName, carouselType, closingText, aspiration } = body;
 
     if (!headline || !Array.isArray(slides) || slides.length === 0) {
       return NextResponse.json({ error: "headline and slides required" }, { status: 400 });
     }
 
     // Render all slides
-    const imageBuffers = renderCarousel({
+    const imageBuffers = await renderCarousel({
       headline,
       slides,
       toolName,
       carouselType,
       closingText,
+      aspiration,
     });
 
     // Upload each slide to Vercel Blob

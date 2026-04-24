@@ -69,9 +69,10 @@ interface PublishPayload {
   carouselSpec?: {
     headline: string;
     slides: string[];
-    carouselType: "famous_person" | "tool_breakdown";
+    carouselType: "famous_person" | "tool_breakdown" | "aspiration";
     toolName: string;
     toolUrl: string;
+    aspiration?: import("@/lib/types").AspirationSlides;
   };
 }
 

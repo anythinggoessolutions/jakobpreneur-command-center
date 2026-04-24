@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { listRecords } from "@/lib/airtable";
 import { parseHookType, parseCarouselType } from "@/lib/airtable-mappings";
-import type { QueuedTool, Tweet } from "@/lib/types";
+import type { QueuedTool, Tweet, AspirationSlides } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,6 +36,7 @@ type ScriptFields = {
   "Carousel Headline"?: string;
   "Carousel Slides"?: string;
   "Carousel Type"?: string;
+  "Carousel JSON"?: string;
   "Created Date"?: string;
 };
 
@@ -101,6 +102,17 @@ export async function GET() {
         .map((s) => s.trim())
         .filter(Boolean);
 
+      let aspiration: AspirationSlides | undefined;
+      const rawJson = script["Carousel JSON"];
+      if (rawJson) {
+        try {
+          const parsed = JSON.parse(rawJson);
+          if (parsed && Array.isArray(parsed.celebs)) aspiration = parsed as AspirationSlides;
+        } catch {
+          // Malformed JSON — ignore; renderer falls back to tool_breakdown layout.
+        }
+      }
+
       const item: QueuedTool = {
         tool: {
           id: r.id,
@@ -133,6 +145,7 @@ export async function GET() {
           type: parseCarouselType(script["Carousel Type"]),
           headline: script["Carousel Headline"] || "",
           slides: carouselSlides,
+          aspiration,
         },
       };
       entries.push({ item, createdTime: r.createdTime });

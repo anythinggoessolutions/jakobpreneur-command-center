@@ -50,13 +50,50 @@ export const ScriptBundleSchema = z.object({
     .length(5)
     .describe("Exactly 5 tweets, one of each type, in this order: tool_of_day, quick_tip, engagement, fact, repurposed_hook"),
   carousel: z.object({
-    type: z.enum(["famous_person", "tool_breakdown"]),
-    headline: z.string().describe("Carousel slide 1 hook headline"),
+    type: z.enum(["famous_person", "tool_breakdown", "aspiration"]),
+    headline: z.string().describe("Carousel slide 1 hook headline (used by tool_breakdown/famous_person)"),
     slides: z
       .array(z.string())
       .length(4)
       .describe(
-        "Exactly 4 content slides, in this order: WHAT IT DOES, HOW TO USE IT, WHY IT MATTERS, WHO IT'S FOR. Each starts with that label.",
+        "Exactly 4 content slides (for tool_breakdown): WHAT IT DOES, HOW TO USE IT, WHY IT MATTERS, WHO IT'S FOR. Each starts with that label. For aspiration type, produce the same 4 as filler — they won't render.",
+      ),
+    aspiration: z
+      .object({
+        celebs: z
+          .array(
+            z.object({
+              fact: z
+                .string()
+                .describe("One-line celebrity/successful-person fact. Real and verifiable. No false endorsement."),
+              imagePrompt: z
+                .string()
+                .describe(
+                  "Prompt for gpt-image-1 to generate a vertical 2:3 portrait-orientation photo that illustrates this person in context (studio, stage, set). Specify lighting, camera angle, composition. The carousel renderer overlays text on the bottom — leave space there.",
+                ),
+            }),
+          )
+          .length(3)
+          .describe("Exactly 3 celebrity-hook slides in order — strongest attention first."),
+        thesis: z
+          .string()
+          .describe(
+            "Slide 4 thesis: one sentence that connects what the 3 celebrities have in common to a GENERALIZABLE lesson. For Type 1 unknown_tool + Type 3 skill_tip, the lesson is usually about systems/leverage (\"Top creators don't type more. They systemize more.\"). Never about fame itself — that doesn't help the viewer.",
+          ),
+        transition: z
+          .string()
+          .describe(
+            "Slide 5: one sentence bridging the celebrity thesis to the tool. Typical pattern: \"You don't have their [team/budget/audience]. But you have [AI/this tool].\"",
+          ),
+        toolIntro: z
+          .string()
+          .describe("Slide 6: tool name + one-sentence what-it-does with a concrete outcome."),
+        benefit: z.string().describe("Slide 7: why it matters for the viewer. Specific, punchy, under 15 words."),
+        scale: z.string().describe("Slide 8: platforms, reach, or proof. Short. E.g. 'Works across IG, TikTok, YouTube, LinkedIn.'"),
+      })
+      .optional()
+      .describe(
+        "Populated ONLY when carousel.type === 'aspiration'. Left unset for tool_breakdown. Aspiration is only used for Type 1 (unknown_tool) and Type 3 (skill_tip) content.",
       ),
   }),
 });
@@ -178,7 +215,11 @@ For tweets #1 (tool_of_day), #2 (quick_tip), #4 (fact), and #5 (repurposed_hook)
 
 Do NOT add this CTA to tweet #3 (engagement) — that one is asking for replies and the CTA dilutes the prompt. Make sure the body + CTA stays within 280 chars; trim the body if needed (the CTA + blank line takes ~45 chars).
 
-# CAROUSEL (1080x1350, 6 slides total — you produce 4 content slides)
+# CAROUSEL
+
+Two formats exist. The user prompt tells you which to use.
+
+## Format A: tool_breakdown (default, 6 slides)
 
 The renderer auto-builds the hook (slide 1) from your headline and the closing CTA (slide 6) from a rotating set. You produce:
 
@@ -189,6 +230,36 @@ The renderer auto-builds the hook (slide 1) from your headline and the closing C
 - **slides[3]** — "WHO IT'S FOR: [content]"
 
 Each slide body is one or two short lines. Keep it tight — these render as bold text on dark backgrounds.
+
+## Format B: aspiration (9 slides, Paul-Hilse-style, only for Type 1 + Type 3)
+
+Use this ONLY when the user prompt explicitly enables it AND contentType is unknown_tool or skill_tip. Never for hidden_feature (Type 2).
+
+Structure:
+- **Slides 1-3:** three real, verifiable celebrity facts that demonstrate *superhuman output / leverage / systems* — NOT just fame. Lead with the strongest attention-grabber. Each comes with an imagePrompt that describes a 2:3 portrait photo of the person in context (studio, stage, podcast, red carpet). Leave the bottom third of the composition sparse so the renderer can overlay text.
+- **Slide 4 (thesis):** generalizes what the 3 celebrities have in common. NEVER "they're famous" — always "they have a system / team / leverage that you can copy." Examples: "Top creators don't type more. They systemize more." / "Millionaire operators don't do more work. They deploy more systems." / "The best in the world all share one secret: leverage."
+- **Slide 5 (transition):** one sentence bridging from the celebrities to the tool. Pattern: "You don't have their [team/budget/audience]. But you have [AI/this tool]."
+- **Slide 6 (toolIntro):** tool name + one-sentence concrete outcome.
+- **Slide 7 (benefit):** why it matters for the viewer. Specific, punchy, under 15 words.
+- **Slide 8 (scale):** platforms / reach / proof in one line.
+- **Slide 9 (CTA):** auto-rendered by the pipeline, don't produce.
+
+Still populate \`headline\` and \`slides[0-3]\` with tool_breakdown-style content as fallback — if image generation fails for any of slides 1-3, the renderer swaps in the tool_breakdown format so the carousel still ships.
+
+### Celebrity fact guardrails (CRITICAL)
+
+- **Real, verifiable only.** Use public figures whose output/reach/net-worth numbers are widely reported. If you're uncertain about a specific stat, pick a different figure you can stand behind.
+- **Never claim a celebrity uses the featured tool** ("MrBeast uses Meedro" = BANNED). Frame them purely as aspiration — their output is the standard, the tool is the shortcut for the viewer.
+- **Pick figures relevant to the niche** — for Type 1/3 AI content, creator/business figures are strongest: MrBeast, Hormozi, Gary Vee, Ali Abdaal, Shaan Puri, Logan Paul, Iman Gadzhi, Elon, Bezos, Jobs. Avoid politicians, controversial figures, or anyone where the discourse will overshadow the tool.
+- **Never target individuals or protected groups.** Same rule as the engagement tweet — attack systems/status quo, not people.
+
+### Image prompt style
+
+Each celeb slide's imagePrompt should read like a cinematography brief:
+- "Photorealistic 2:3 vertical portrait of [PERSON] mid-speech at a [SETTING]. [Lighting]. Shot on 50mm. [Composition note — keep bottom third clean for text overlay]."
+- Example: "Photorealistic 2:3 vertical portrait of MrBeast mid-gesture in his content studio, warm studio lighting, shallow depth of field behind him, shot on 50mm, subject framed upper-center with negative space at bottom for text overlay."
+
+Don't name the tool or product in the image prompt — keep the image about the person.
 
 # CAROUSEL FRAMING RULE (CRITICAL — legal/credibility risk)
 
@@ -217,6 +288,13 @@ export interface GenerateInput {
   hookType?: "A" | "B" | "C" | "D" | "E" | "F";
   contentType?: "unknown_tool" | "hidden_feature" | "skill_tip";
   reason?: string;
+  /**
+   * When true AND contentType ∈ {unknown_tool, skill_tip}, Claude should
+   * produce the 9-slide aspiration carousel (with 3 celebrity hook slides).
+   * When false / undefined, Claude produces the standard 6-slide tool_breakdown.
+   * Controlled by the AI_CAROUSEL_ENABLED env flag upstream.
+   */
+  aspirationEnabled?: boolean;
 }
 
 export async function generateScriptBundle(input: GenerateInput): Promise<ScriptBundle> {
@@ -272,6 +350,19 @@ function buildUserPrompt(input: GenerateInput): string {
   }
   if (input.reason) {
     lines.push(`Why this tool was added: ${input.reason}`);
+  }
+  // Carousel format gate
+  const aspirationAllowed =
+    input.aspirationEnabled &&
+    (!input.contentType || input.contentType === "unknown_tool" || input.contentType === "skill_tip");
+  if (aspirationAllowed) {
+    lines.push(
+      `Carousel format: use "aspiration" (9-slide Paul-Hilse-style with 3 celebrity hook slides). Populate the \`aspiration\` field on the carousel per the schema. Still fill headline + slides[0-3] with tool_breakdown-style fallback content.`,
+    );
+  } else {
+    lines.push(
+      `Carousel format: use "tool_breakdown" (6-slide default). Do NOT populate the \`aspiration\` field.`,
+    );
   }
   lines.push(``);
   lines.push(

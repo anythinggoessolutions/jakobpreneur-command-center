@@ -28,7 +28,7 @@ type VideoFields = {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { toolName, headline, slides, carouselType, toolUrl, igCaption } = body;
+    const { toolName, headline, slides, carouselType, toolUrl, igCaption, aspiration } = body;
 
     if (!toolName || !headline || !Array.isArray(slides)) {
       return NextResponse.json(
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
       carouselType: carouselType || "tool_breakdown",
       toolName,
       toolUrl,
+      ...(aspiration ? { aspiration } : {}),
     });
 
     const record = await createRecord<VideoFields>("Videos", {

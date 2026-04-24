@@ -12,8 +12,10 @@
  * Uses @napi-rs/canvas (pure Rust, works on Vercel serverless).
  */
 
-import { createCanvas, GlobalFonts } from "@napi-rs/canvas";
+import { createCanvas, GlobalFonts, loadImage, Image } from "@napi-rs/canvas";
 import path from "path";
+import type { AspirationSlides } from "./types";
+import { generateCarouselImages } from "./openai-images";
 
 // Register bundled Inter fonts. Vercel's Linux serverless runtime has no
 // system fonts, so `Helvetica` (macOS-only) silently renders nothing.
@@ -44,7 +46,8 @@ interface CarouselSpec {
   slides: string[];          // Slides 2-5 content (max 4 items)
   closingText?: string;      // Final slide message — default "Follow @jakobpreneur"
   toolName?: string;         // Shown as small label
-  carouselType?: "famous_person" | "tool_breakdown";
+  carouselType?: "famous_person" | "tool_breakdown" | "aspiration";
+  aspiration?: AspirationSlides; // only used when carouselType === "aspiration"
 }
 
 /**
@@ -259,43 +262,272 @@ function renderFinalSlide(
   return canvas.toBuffer("image/png");
 }
 
+const MOTIVATIONAL_CLOSERS = [
+  "MILLIONS OF PEOPLE\nTAKE ACTION EVERY DAY.\nWHY NOT YOU?",
+  "YOU HAVE\nTHE TOOLS.\nYOU HAVE\nTHE TIME.\nWHAT ELSE\nDO YOU NEED?",
+  "EVERY EXPERT\nWAS ONCE\nA BEGINNER\nWHO REFUSED\nTO QUIT.",
+  "THE GAP BETWEEN\nDREAMING AND DOING\nIS ONE DECISION.\nMAKE IT TODAY.",
+  "SOMEONE LESS\nQUALIFIED THAN YOU\nIS DOING IT RIGHT NOW.\nGO GET YOURS.",
+  "STOP CONSUMING.\nSTART CREATING.\nTHE WORLD\nIS WAITING.",
+  "YOU DON'T NEED\nANOTHER COURSE.\nYOU NEED\nONE HOUR\nOF DOING.",
+  "THE BEST TIME\nTO START\nWAS YESTERDAY.\nTHE SECOND BEST\nIS NOW.",
+  "OPPORTUNITY\nSHOWS UP\nDISGUISED AS WORK.\nSHOW UP ANYWAY.",
+  "EVERY SCROLL\nIS A CHOICE\nTO STAY WHERE\nYOU ARE.\nCHOOSE DIFFERENTLY.",
+];
+
 /**
- * Render a full carousel. Returns array of PNG buffers.
- * Slides: 1 hook + N content slides + 1 final CTA.
+ * Celeb hook slide (aspiration carousel, slides 1-3).
+ * Full-bleed image with a dark gradient at the bottom and the celeb-fact
+ * text overlaid in bold. If the image failed to generate, falls back to a
+ * text-on-dark card so the carousel still ships.
  */
-export function renderCarousel(spec: CarouselSpec): Buffer[] {
+function renderCelebSlide(
+  pageNum: number,
+  totalPages: number,
+  fact: string,
+  image: Image | null,
+): Buffer {
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext("2d");
+
+  // Background — either full-bleed image or dark fallback
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  if (image) {
+    // Cover-fit: scale to fill both dimensions, center-crop
+    const srcAspect = image.width / image.height;
+    const dstAspect = WIDTH / HEIGHT;
+    let sx = 0, sy = 0, sw = image.width, sh = image.height;
+    if (srcAspect > dstAspect) {
+      // Source wider than frame — crop sides
+      sw = image.height * dstAspect;
+      sx = (image.width - sw) / 2;
+    } else {
+      sh = image.width / dstAspect;
+      sy = (image.height - sh) / 2;
+    }
+    ctx.drawImage(image, sx, sy, sw, sh, 0, 0, WIDTH, HEIGHT);
+  }
+
+  // Dark gradient from bottom up — keeps overlay text readable even on
+  // bright or busy celeb photos. Covers bottom 55% of the frame.
+  const grad = ctx.createLinearGradient(0, HEIGHT * 0.45, 0, HEIGHT);
+  grad.addColorStop(0, "rgba(10,10,10,0)");
+  grad.addColorStop(1, "rgba(10,10,10,0.92)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, HEIGHT * 0.45, WIDTH, HEIGHT * 0.55);
+
+  // Top-left page number — rendered on a subtle pill so it stays readable
+  // if the photo is light in that corner.
+  const pageText = `${String(pageNum).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`;
+  ctx.font = "bold 32px Inter";
+  const pageW = ctx.measureText(pageText).width + 40;
+  ctx.fillStyle = "rgba(10,10,10,0.55)";
+  ctx.beginPath();
+  ctx.moveTo(50 + 20, 60);
+  ctx.arcTo(50 + pageW, 60, 50 + pageW, 60 + 52, 20);
+  ctx.arcTo(50 + pageW, 60 + 52, 50, 60 + 52, 20);
+  ctx.arcTo(50, 60 + 52, 50, 60, 20);
+  ctx.arcTo(50, 60, 50 + pageW, 60, 20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = FG;
+  ctx.fillText(pageText, 70, 96);
+
+  // Fact overlay — white bold text on the dark gradient, lower portion.
+  ctx.fillStyle = FG;
+  const MARGIN_X = 60;
+  const maxWidth = WIDTH - MARGIN_X * 2;
+  let fontSize = 72;
+  const MIN_FONT = 42;
+  let lines: string[] = [];
+  while (fontSize >= MIN_FONT) {
+    ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
+    lines = wrapText(ctx, fact, maxWidth);
+    if (lines.length <= 4) break;
+    fontSize -= 4;
+  }
+  const lineHeight = Math.round(fontSize * 1.15);
+  const blockH = lines.length * lineHeight;
+  const startY = HEIGHT - 120 - blockH;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, MARGIN_X, startY + i * lineHeight + fontSize);
+  });
+
+  return canvas.toBuffer("image/png");
+}
+
+/**
+ * Thesis / transition / tool-intro / benefit / scale slide for the
+ * aspiration carousel. Text-on-dark, distinct pill label per slot.
+ */
+function renderAspirationTextSlide(
+  pageNum: number,
+  totalPages: number,
+  label: string,
+  content: string,
+  accentColor: string,
+): Buffer {
+  const canvas = createCanvas(WIDTH, HEIGHT);
+  const ctx = canvas.getContext("2d");
+
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  ctx.fillStyle = MUTED;
+  ctx.font = "bold 32px Inter";
+  ctx.fillText(
+    `${String(pageNum).padStart(2, "0")} / ${String(totalPages).padStart(2, "0")}`,
+    60,
+    90,
+  );
+
+  // Colored pill label at top
+  const labelText = label.toUpperCase();
+  ctx.font = "bold 36px Inter";
+  const labelWidth = ctx.measureText(labelText).width + 60;
+  ctx.fillStyle = accentColor;
+  const labelX = 60, labelY = 200, labelH = 70, radius = 35;
+  ctx.beginPath();
+  ctx.moveTo(labelX + radius, labelY);
+  ctx.arcTo(labelX + labelWidth, labelY, labelX + labelWidth, labelY + labelH, radius);
+  ctx.arcTo(labelX + labelWidth, labelY + labelH, labelX, labelY + labelH, radius);
+  ctx.arcTo(labelX, labelY + labelH, labelX, labelY, radius);
+  ctx.arcTo(labelX, labelY, labelX + labelWidth, labelY, radius);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = BG;
+  ctx.font = "bold 36px Inter";
+  ctx.fillText(labelText, labelX + 30, labelY + labelH / 2 + 13);
+
+  // Body text — auto-size to fit
+  const MARGIN_X = 60;
+  const maxWidth = WIDTH - MARGIN_X * 2;
+  let fontSize = 72;
+  const MIN_FONT = 44;
+  let lines: string[] = [];
+  while (fontSize >= MIN_FONT) {
+    ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
+    lines = wrapText(ctx, content, maxWidth);
+    if (lines.length <= 6) break;
+    fontSize -= 4;
+  }
+  const lineHeight = Math.round(fontSize * 1.2);
+  const startY = 380;
+  ctx.fillStyle = FG;
+  ctx.font = `bold ${fontSize}px ${FONT_BLACK}`;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, MARGIN_X, startY + i * lineHeight);
+  });
+
+  // Bottom accent bar in the same color as the pill
+  ctx.fillStyle = accentColor;
+  ctx.fillRect(60, HEIGHT - 80, 120, 10);
+
+  return canvas.toBuffer("image/png");
+}
+
+/**
+ * Render a full carousel. Async because aspiration carousels fetch
+ * AI-generated images over the network before compositing.
+ *
+ * Slides: 1 hook + N content slides + 1 final CTA.  (or for aspiration:
+ * 3 celeb + 1 thesis + 1 transition + 1 tool intro + 1 benefit + 1 scale + 1 CTA).
+ */
+export async function renderCarousel(spec: CarouselSpec): Promise<Buffer[]> {
   ensureFonts();
+
+  // Aspiration path — 9 slides, celeb images on 1-3, text on 4-9.
+  // If anything in the image path fails, we fall back to the tool_breakdown
+  // layout so the carousel still ships.
+  if (spec.carouselType === "aspiration" && spec.aspiration) {
+    try {
+      return await renderAspirationCarousel(spec, spec.aspiration);
+    } catch (err) {
+      console.error("[carousel-renderer] aspiration path failed, falling back:", err);
+      // fall through to tool_breakdown below
+    }
+  }
+
+  // Default path — unchanged from previous sync behavior.
+  return renderToolBreakdown(spec);
+}
+
+function renderToolBreakdown(spec: CarouselSpec): Buffer[] {
   const contentSlideCount = Math.min(4, spec.slides.length);
   const totalPages = 1 + contentSlideCount + 1;
-
   const step_labels = ["WHAT IT DOES", "HOW TO USE IT", "WHY IT MATTERS", "WHO IT'S FOR"];
 
   const images: Buffer[] = [];
-
-  // Slide 1: hook
   images.push(renderHookSlide(spec));
 
-  // Slides 2-N: content
   for (let i = 0; i < contentSlideCount; i++) {
     const content = spec.slides[i] || "";
-    // Strip "Label:" prefix if present
     const cleaned = content.replace(/^[^:]+:\s*/, "").trim();
     images.push(renderContentSlide(i + 2, totalPages, step_labels[i] || `STEP ${i + 1}`, cleaned));
   }
 
-  // Final slide — rotating motivational closers (jakobpreneur voice)
-  const MOTIVATIONAL_CLOSERS = [
-    "MILLIONS OF PEOPLE\nTAKE ACTION EVERY DAY.\nWHY NOT YOU?",
-    "YOU HAVE\nTHE TOOLS.\nYOU HAVE\nTHE TIME.\nWHAT ELSE\nDO YOU NEED?",
-    "EVERY EXPERT\nWAS ONCE\nA BEGINNER\nWHO REFUSED\nTO QUIT.",
-    "THE GAP BETWEEN\nDREAMING AND DOING\nIS ONE DECISION.\nMAKE IT TODAY.",
-    "SOMEONE LESS\nQUALIFIED THAN YOU\nIS DOING IT RIGHT NOW.\nGO GET YOURS.",
-    "STOP CONSUMING.\nSTART CREATING.\nTHE WORLD\nIS WAITING.",
-    "YOU DON'T NEED\nANOTHER COURSE.\nYOU NEED\nONE HOUR\nOF DOING.",
-    "THE BEST TIME\nTO START\nWAS YESTERDAY.\nTHE SECOND BEST\nIS NOW.",
-    "OPPORTUNITY\nSHOWS UP\nDISGUISED AS WORK.\nSHOW UP ANYWAY.",
-    "EVERY SCROLL\nIS A CHOICE\nTO STAY WHERE\nYOU ARE.\nCHOOSE DIFFERENTLY.",
-  ];
+  const closing =
+    spec.closingText ||
+    MOTIVATIONAL_CLOSERS[Math.floor(Math.random() * MOTIVATIONAL_CLOSERS.length)];
+  images.push(renderFinalSlide(totalPages, closing));
+
+  return images;
+}
+
+async function renderAspirationCarousel(
+  spec: CarouselSpec,
+  aspiration: AspirationSlides,
+): Promise<Buffer[]> {
+  const totalPages = 9;
+  const images: Buffer[] = [];
+
+  // Slides 1-3 — parallel image generation, then composite. If a slide's
+  // image gen failed (Airtable JSON had no imageUrl), generate on the fly.
+  const celebImages: (Image | null)[] = await Promise.all(
+    aspiration.celebs.map(async (c) => {
+      try {
+        if (c.imageUrl) {
+          return await loadImage(c.imageUrl);
+        }
+      } catch (err) {
+        console.error("[carousel-renderer] failed to load stored celeb image:", err);
+      }
+      return null;
+    }),
+  );
+
+  // If any image is missing, try to fill it in now from the prompt.
+  const missing = celebImages.map((img, i) => (img ? null : i)).filter((i) => i !== null) as number[];
+  if (missing.length > 0) {
+    const prompts = missing.map((i) => aspiration.celebs[i].imagePrompt);
+    const generated = await generateCarouselImages(prompts, { quality: "high" });
+    for (let j = 0; j < missing.length; j++) {
+      const gen = generated[j];
+      if (gen) {
+        try {
+          celebImages[missing[j]] = await loadImage(gen.url);
+        } catch (err) {
+          console.error("[carousel-renderer] failed to load freshly-generated image:", err);
+        }
+      }
+    }
+  }
+
+  for (let i = 0; i < 3; i++) {
+    const c = aspiration.celebs[i];
+    images.push(renderCelebSlide(i + 1, totalPages, c?.fact || "", celebImages[i]));
+  }
+
+  // Slides 4-8 — text on dark, each with a distinct pill color
+  images.push(renderAspirationTextSlide(4, totalPages, "THE LESSON", aspiration.thesis, YELLOW));
+  images.push(renderAspirationTextSlide(5, totalPages, "BUT HERE'S THE THING", aspiration.transition, GREEN));
+  images.push(renderAspirationTextSlide(6, totalPages, "THE TOOL", aspiration.toolIntro, YELLOW));
+  images.push(renderAspirationTextSlide(7, totalPages, "WHY IT MATTERS", aspiration.benefit, GREEN));
+  images.push(renderAspirationTextSlide(8, totalPages, "WHERE IT WORKS", aspiration.scale, YELLOW));
+
+  // Slide 9 — existing CTA closer
   const closing =
     spec.closingText ||
     MOTIVATIONAL_CLOSERS[Math.floor(Math.random() * MOTIVATIONAL_CLOSERS.length)];

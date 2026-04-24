@@ -40,8 +40,13 @@ type ScriptFields = {
   "Carousel Headline"?: string;
   "Carousel Slides"?: string;
   "Carousel Type"?: string;
+  "Carousel JSON"?: string; // full carousel payload when type === "aspiration" (aspiration field serialized)
   "Created Date"?: string;
 };
+
+function aspirationEnabled(): boolean {
+  return (process.env.AI_CAROUSEL_ENABLED || "").toLowerCase() === "true";
+}
 
 export interface DiscoverPersistResult {
   ranAt: string;
@@ -111,6 +116,7 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
           hookType: tool.suggestedHookType,
           contentType: tool.contentType,
           reason: tool.reasonInteresting,
+          aspirationEnabled: aspirationEnabled(),
         });
 
         // Safety net: if Claude returned a different hook type than
@@ -148,6 +154,10 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
           "Carousel Headline": bundle.carousel.headline,
           "Carousel Slides": bundle.carousel.slides.join("\n\n"),
           "Carousel Type": CAROUSEL_TYPE_LABEL[bundle.carousel.type],
+          "Carousel JSON":
+            bundle.carousel.type === "aspiration" && bundle.carousel.aspiration
+              ? JSON.stringify(bundle.carousel.aspiration)
+              : undefined,
           "Created Date": today,
         });
 

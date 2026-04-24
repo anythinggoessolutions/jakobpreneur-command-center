@@ -156,19 +156,21 @@ export async function GET(req: NextRequest) {
           headline?: string;
           slides?: string[];
           toolName?: string;
-          carouselType?: "famous_person" | "tool_breakdown";
+          carouselType?: "famous_person" | "tool_breakdown" | "aspiration";
           toolUrl?: string;
+          aspiration?: import("@/lib/types").AspirationSlides;
         };
         if (!spec.headline || !Array.isArray(spec.slides) || spec.slides.length === 0) {
           throw new Error("carousel spec missing headline or slides");
         }
 
         // Render slides
-        const buffers = renderCarousel({
+        const buffers = await renderCarousel({
           headline: spec.headline,
           slides: spec.slides,
           toolName: spec.toolName,
           carouselType: spec.carouselType,
+          aspiration: spec.aspiration,
         });
 
         // Upload to Blob

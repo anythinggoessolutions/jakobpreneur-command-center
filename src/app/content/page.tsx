@@ -423,6 +423,7 @@ export default function ContentPage() {
                       carouselType: currentItem.carousel.type,
                       toolName: currentItem.tool.name,
                       toolUrl: currentItem.tool.url,
+                      aspiration: currentItem.carousel.aspiration,
                     },
                   }}
                 />

@@ -13,6 +13,7 @@
     "@napi-rs/canvas": "^0.1.98",
     "@vercel/blob": "^2.3.3",
     "next": "16.2.3",
+    "openai": "^6.34.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.3.6"

@@ -20,9 +20,10 @@ export const CONTENT_TYPE_LABEL: Record<"unknown_tool" | "hidden_feature" | "ski
   skill_tip: "Type 3 - Skill/Tip",
 };
 
-export const CAROUSEL_TYPE_LABEL: Record<"famous_person" | "tool_breakdown", string> = {
+export const CAROUSEL_TYPE_LABEL: Record<"famous_person" | "tool_breakdown" | "aspiration", string> = {
   famous_person: "Famous Person",
   tool_breakdown: "Tool Breakdown",
+  aspiration: "Aspiration",
 };
 
 const HOOK_LABEL_TO_CODE: Record<string, HookCode> = {
@@ -34,9 +35,10 @@ const HOOK_LABEL_TO_CODE: Record<string, HookCode> = {
   "F - Replace-It": "F",
 };
 
-const CAROUSEL_LABEL_TO_CODE: Record<string, "famous_person" | "tool_breakdown"> = {
+const CAROUSEL_LABEL_TO_CODE: Record<string, "famous_person" | "tool_breakdown" | "aspiration"> = {
   "Famous Person": "famous_person",
   "Tool Breakdown": "tool_breakdown",
+  "Aspiration": "aspiration",
 };
 
 export function parseHookType(label: string | undefined): HookCode {
@@ -44,7 +46,7 @@ export function parseHookType(label: string | undefined): HookCode {
   return HOOK_LABEL_TO_CODE[label] ?? "B";
 }
 
-export function parseCarouselType(label: string | undefined): "famous_person" | "tool_breakdown" {
+export function parseCarouselType(label: string | undefined): "famous_person" | "tool_breakdown" | "aspiration" {
   if (!label) return "tool_breakdown";
   return CAROUSEL_LABEL_TO_CODE[label] ?? "tool_breakdown";
 }

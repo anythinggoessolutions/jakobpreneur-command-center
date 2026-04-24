@@ -39,6 +39,7 @@ type ScriptFields = {
   "Carousel Headline"?: string;
   "Carousel Slides"?: string;
   "Carousel Type"?: string;
+  "Carousel JSON"?: string;
   "Created Date"?: string;
 };
 
@@ -70,12 +71,15 @@ export async function POST(req: NextRequest) {
     const partNumber =
       existing.reduce((m, r) => Math.max(m, r.fields["Part Number"] || 0), 0) + 1;
 
+    const aspirationEnabled = (process.env.AI_CAROUSEL_ENABLED || "").toLowerCase() === "true";
+
     const bundle = await generateScriptBundle({
       toolName: name,
       toolUrl: url,
       partNumber,
       hookType,
       reason,
+      aspirationEnabled,
     });
 
     const today = new Date().toISOString().split("T")[0];
@@ -107,6 +111,10 @@ export async function POST(req: NextRequest) {
       "Carousel Headline": bundle.carousel.headline,
       "Carousel Slides": bundle.carousel.slides.join("\n\n"),
       "Carousel Type": CAROUSEL_TYPE_LABEL[bundle.carousel.type],
+      "Carousel JSON":
+        bundle.carousel.type === "aspiration" && bundle.carousel.aspiration
+          ? JSON.stringify(bundle.carousel.aspiration)
+          : undefined,
       "Created Date": today,
     });
 
@@ -146,6 +154,7 @@ export async function POST(req: NextRequest) {
         type: bundle.carousel.type,
         headline: bundle.carousel.headline,
         slides: bundle.carousel.slides,
+        aspiration: bundle.carousel.aspiration,
       },
     };
 
