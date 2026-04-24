@@ -64,8 +64,14 @@ export function generateCaptions(item: QueuedTool): SocialCaptions {
   const { tool, script } = item;
   const partText = script.hookType === "B" ? `Pt. ${tool.partNumber}` : "";
 
-  // Pull the hook text (first line) for use as a teaser
-  const firstLine = script.hook.split("\n")[0].trim();
+  // Pull the hook text (first line) for use as a teaser. Strip any legacy
+  // "@jakobpreneur:" prefix — Hook B used to include it, and scripts
+  // generated before 2026-04-23 still have it stored in Airtable. New
+  // scripts won't hit this regex; it's only for cleaning stale rows.
+  const firstLine = script.hook
+    .split("\n")[0]
+    .replace(/^@jakobpreneur:\s*/i, "")
+    .trim();
   const benefit = script.benefit.replace(/^It'll\s+/i, "").replace(/\.$/, "");
 
   // Build tags
