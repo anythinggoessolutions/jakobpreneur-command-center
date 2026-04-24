@@ -4,7 +4,10 @@ import { renderCarousel } from "@/lib/carousel-renderer";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Aspiration carousels generate 3 gpt-image-1 images in parallel (~60-90s)
+// plus canvas composite + blob upload. 60s was too tight; bump well past
+// the expected worst case so one slow image doesn't kill the whole render.
+export const maxDuration = 300;
 
 /**
  * POST /api/carousel/generate
