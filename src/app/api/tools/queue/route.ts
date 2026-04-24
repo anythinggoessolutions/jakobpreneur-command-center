@@ -66,7 +66,7 @@ export async function GET() {
       scriptsByTool.set(name.trim().toLowerCase(), r.fields);
     }
 
-    const queue: QueuedTool[] = [];
+    const entries: Array<{ item: QueuedTool; createdTime: string }> = [];
     for (const r of toolRecords) {
       if (r.fields.Status !== "queued") continue;
       const name = (r.fields.Name || "").trim();
@@ -135,15 +135,19 @@ export async function GET() {
           slides: carouselSlides,
         },
       };
-      queue.push(item);
+      entries.push({ item, createdTime: r.createdTime });
     }
 
-    // Sort by relevance score (high first), then part number (low first)
-    queue.sort((a, b) => {
-      const score = b.tool.relevanceScore - a.tool.relevanceScore;
-      if (score !== 0) return score;
-      return a.tool.partNumber - b.tool.partNumber;
+    // FIFO: oldest Airtable record first, so newly discovered tools queue up
+    // behind existing work-in-progress instead of jumping to the top.
+    // Relevance score is only a tiebreaker for same-timestamp records (rare —
+    // the daily cron creates rows in sequence so timestamps differ by ms).
+    entries.sort((a, b) => {
+      const t = a.createdTime.localeCompare(b.createdTime);
+      if (t !== 0) return t;
+      return b.item.tool.relevanceScore - a.item.tool.relevanceScore;
     });
+    const queue = entries.map((e) => e.item);
 
     return NextResponse.json({ queue });
   } catch (err: unknown) {
