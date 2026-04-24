@@ -262,6 +262,34 @@ function renderFinalSlide(
   return canvas.toBuffer("image/png");
 }
 
+/**
+ * Fetch an image URL to a Buffer, then decode with loadImage.
+ *
+ * Why not pass the URL directly to loadImage? On Vercel's serverless
+ * runtime, @napi-rs/canvas's loadImage fails on HTTPS URLs with
+ * "Invalid SVG image" — it receives bytes it can't identify and falls
+ * through to the SVG decoder. Fetching explicitly and passing the
+ * Buffer lets canvas use the PNG decoder directly.
+ *
+ * Returns null on any failure — caller falls back to the text-on-dark
+ * celeb slide so the carousel still ships.
+ */
+async function fetchImageByUrl(url: string | undefined | null): Promise<Image | null> {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.error(`[carousel-renderer] image fetch ${res.status}: ${url}`);
+      return null;
+    }
+    const ab = await res.arrayBuffer();
+    return await loadImage(Buffer.from(ab));
+  } catch (err) {
+    console.error("[carousel-renderer] failed to load celeb image:", err);
+    return null;
+  }
+}
+
 const MOTIVATIONAL_CLOSERS = [
   "MILLIONS OF PEOPLE\nTAKE ACTION EVERY DAY.\nWHY NOT YOU?",
   "YOU HAVE\nTHE TOOLS.\nYOU HAVE\nTHE TIME.\nWHAT ELSE\nDO YOU NEED?",
@@ -486,16 +514,7 @@ async function renderAspirationCarousel(
   // Slides 1-3 — parallel image generation, then composite. If a slide's
   // image gen failed (Airtable JSON had no imageUrl), generate on the fly.
   const celebImages: (Image | null)[] = await Promise.all(
-    aspiration.celebs.map(async (c) => {
-      try {
-        if (c.imageUrl) {
-          return await loadImage(c.imageUrl);
-        }
-      } catch (err) {
-        console.error("[carousel-renderer] failed to load stored celeb image:", err);
-      }
-      return null;
-    }),
+    aspiration.celebs.map((c) => fetchImageByUrl(c.imageUrl)),
   );
 
   // If any image is missing, try to fill it in now from the prompt.
@@ -503,16 +522,13 @@ async function renderAspirationCarousel(
   if (missing.length > 0) {
     const prompts = missing.map((i) => aspiration.celebs[i].imagePrompt);
     const generated = await generateCarouselImages(prompts, { quality: "high" });
-    for (let j = 0; j < missing.length; j++) {
-      const gen = generated[j];
-      if (gen) {
-        try {
-          celebImages[missing[j]] = await loadImage(gen.url);
-        } catch (err) {
-          console.error("[carousel-renderer] failed to load freshly-generated image:", err);
-        }
-      }
-    }
+    await Promise.all(
+      missing.map(async (slotIdx, j) => {
+        const gen = generated[j];
+        if (!gen) return;
+        celebImages[slotIdx] = await fetchImageByUrl(gen.url);
+      }),
+    );
   }
 
   for (let i = 0; i < 3; i++) {
