@@ -13,6 +13,7 @@
  */
 
 import { createCanvas, GlobalFonts, loadImage, Image } from "@napi-rs/canvas";
+import sharp from "sharp";
 import path from "path";
 import type { AspirationSlides } from "./types";
 import { generateCarouselImages } from "./openai-images";
@@ -263,13 +264,17 @@ function renderFinalSlide(
 }
 
 /**
- * Fetch an image URL to a Buffer, then decode with loadImage.
+ * Fetch an image URL to a Buffer, re-encode with sharp, then decode with
+ * @napi-rs/canvas loadImage.
  *
- * Why not pass the URL directly to loadImage? On Vercel's serverless
- * runtime, @napi-rs/canvas's loadImage fails on HTTPS URLs with
- * "Invalid SVG image" — it receives bytes it can't identify and falls
- * through to the SVG decoder. Fetching explicitly and passing the
- * Buffer lets canvas use the PNG decoder directly.
+ * Why re-encode? @napi-rs/canvas 0.1.98's loadImage fails on large PNGs
+ * produced by gpt-image-1 — it emits "Invalid SVG image" (InvalidArg)
+ * even though the bytes start with a valid PNG magic (89 50 4E 47 …).
+ * Some combination of chunk ordering / filter type / bit depth in the
+ * OpenAI PNG output trips the napi-rs/canvas decoder. sharp decodes
+ * every PNG variant correctly and re-emits a clean minimal PNG that
+ * canvas can then load. Confirmed via local repro — 2.6 MB gpt-image-1
+ * PNG fails direct, succeeds after sharp roundtrip.
  *
  * Returns null on any failure — caller falls back to the text-on-dark
  * celeb slide so the carousel still ships.
@@ -283,7 +288,10 @@ async function fetchImageByUrl(url: string | undefined | null): Promise<Image | 
       return null;
     }
     const ab = await res.arrayBuffer();
-    return await loadImage(Buffer.from(ab));
+    const cleaned = await sharp(Buffer.from(ab))
+      .png({ compressionLevel: 6, adaptiveFiltering: false })
+      .toBuffer();
+    return await loadImage(cleaned);
   } catch (err) {
     console.error("[carousel-renderer] failed to load celeb image:", err);
     return null;
