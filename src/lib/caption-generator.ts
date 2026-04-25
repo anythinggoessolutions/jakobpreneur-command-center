@@ -86,10 +86,13 @@ export function generateCaptions(item: QueuedTool): SocialCaptions {
     ...BASE_HASHTAGS,
   ].slice(0, 25).join(" ");
 
+  // Curiosity gap: don't name the tool or include its URL — viewers must
+  // watch the video to find out what it is. Drives watch-time + comments
+  // ("what's the name?!") at the cost of clickthroughs from caption.
   const instagram = [
     firstLine,
     "",
-    `If you go to ${tool.url}, you can ${benefit}.`,
+    "Watch to the end to find out what it is.",
     "",
     "🟢 Save this for later",
     "🟢 Share with a friend who'd use this",
@@ -111,7 +114,7 @@ export function generateCaptions(item: QueuedTool): SocialCaptions {
   const tiktok = [
     firstLine,
     "",
-    `${tool.name} → ${benefit}.`,
+    "Watch to the end to find out what it is.",
     "",
     tiktokTags,
   ].join("\n");
@@ -119,38 +122,37 @@ export function generateCaptions(item: QueuedTool): SocialCaptions {
   // ----------------------------------------------------------------
   // YouTube Shorts title (100 chars max) and description
   // ----------------------------------------------------------------
+  // Titles do NOT name the tool — same curiosity-gap rule as the IG caption.
   let youtubeTitle: string;
   switch (script.hookType) {
     case "B":
-      youtubeTitle = `${tool.name} - AI Tools You Need To Know ${partText} #shorts`;
+      youtubeTitle = `Powerful AI Tools You Should Know ${partText} #shorts`;
       break;
     case "A":
-      youtubeTitle = `I Was Today Years Old When I Found ${tool.name} #shorts`;
+      youtubeTitle = `I Was Today Years Old When I Found This Out #shorts`;
       break;
     case "D":
-      youtubeTitle = `${tool.name} - The Website They Don't Want You To Know About #shorts`;
+      youtubeTitle = `The Website They Don't Want You To Know About #shorts`;
       break;
     case "E":
-      youtubeTitle = `Bookmark ${tool.name} Before It Goes Viral #shorts`;
+      youtubeTitle = `Bookmark This Before It Goes Viral #shorts`;
       break;
     case "F":
-      youtubeTitle = `Stop What You're Doing And Use ${tool.name} #shorts`;
+      youtubeTitle = `Stop What You're Doing #shorts`;
       break;
     case "C":
     default:
-      youtubeTitle = `${tool.name} Will Change How You Work #shorts`;
+      youtubeTitle = `This AI Will Change How You Work #shorts`;
       break;
   }
   youtubeTitle = youtubeTitle.slice(0, 100);
 
+  // Description follows the same curiosity-gap rule — no tool name, no URL.
+  // Description-side hashtags still carry category keywords for discovery.
   const youtubeDescription = [
     firstLine,
     "",
-    `${tool.name}: ${tool.url}`,
-    "",
-    `What it does: ${tool.description}`,
-    "",
-    `💡 ${script.benefit}`,
+    "Watch the full video to find out what this is.",
     "",
     "🟢 Subscribe for more AI tools and automation tips",
     "",
