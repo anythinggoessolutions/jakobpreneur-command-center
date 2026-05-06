@@ -4,7 +4,11 @@ import { listRecords } from "@/lib/airtable";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// 800s = Vercel Pro plan max. Bumped from 300 because aspiration carousel
+// script generation (9-slide Paul-Hilse format with celeb prompts) makes
+// each tool's Claude call substantially slower; 5 tools at 60-90s each
+// blew past the old 300s cap.
+export const maxDuration = 800;
 
 // Hard cap on queue size — if we're at or above this, the daily cron does
 // nothing (no Anthropic spend) until the user records and drains some.
