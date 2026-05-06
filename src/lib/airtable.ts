@@ -60,3 +60,11 @@ export async function updateRecord<T>(table: string, id: string, fields: Partial
   if (!res.ok) throw new Error(`Airtable update failed: ${res.status} ${await res.text()}`);
   return await res.json();
 }
+
+export async function deleteRecord(table: string, id: string): Promise<void> {
+  const res = await fetch(`${AIRTABLE_API}/${baseId()}/${encodeURIComponent(table)}/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Airtable delete failed: ${res.status} ${await res.text()}`);
+}

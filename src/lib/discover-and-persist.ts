@@ -3,7 +3,7 @@
  * (`/api/cron/discover-tools`) and on-demand UI trigger (`/api/tools/discover`).
  */
 
-import { listRecords, createRecord } from "./airtable";
+import { listRecords, createRecord, deleteRecord, type AirtableRecord } from "./airtable";
 import { discoverNewTools } from "./tool-discovery";
 import { generateScriptBundle } from "./script-generator";
 import {
@@ -140,26 +140,43 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
           Description: bundle.description,
         });
 
-        const scriptRec = await createRecord<ScriptFields>("Scripts", {
-          "Tool Name": tool.name,
-          Hook: bundle.script.hook,
-          Bridge: bundle.script.bridge,
-          Benefit: bundle.script.benefit,
-          Demo: bundle.script.demo,
-          Close: bundle.script.close,
-          "Full Script": bundle.script.fullScript,
-          "Hook Type": HOOK_TYPE_LABEL[bundle.hookType],
-          "Estimated Seconds": bundle.script.estimatedSeconds,
-          Tweets: JSON.stringify(bundle.tweets, null, 2),
-          "Carousel Headline": bundle.carousel.headline,
-          "Carousel Slides": bundle.carousel.slides.join("\n\n"),
-          "Carousel Type": CAROUSEL_TYPE_LABEL[bundle.carousel.type],
-          "Carousel JSON":
-            bundle.carousel.type === "aspiration" && bundle.carousel.aspiration
-              ? JSON.stringify(bundle.carousel.aspiration)
-              : undefined,
-          "Created Date": today,
-        });
+        let scriptRec: AirtableRecord<ScriptFields>;
+        try {
+          scriptRec = await createRecord<ScriptFields>("Scripts", {
+            "Tool Name": tool.name,
+            Hook: bundle.script.hook,
+            Bridge: bundle.script.bridge,
+            Benefit: bundle.script.benefit,
+            Demo: bundle.script.demo,
+            Close: bundle.script.close,
+            "Full Script": bundle.script.fullScript,
+            "Hook Type": HOOK_TYPE_LABEL[bundle.hookType],
+            "Estimated Seconds": bundle.script.estimatedSeconds,
+            Tweets: JSON.stringify(bundle.tweets, null, 2),
+            "Carousel Headline": bundle.carousel.headline,
+            "Carousel Slides": bundle.carousel.slides.join("\n\n"),
+            "Carousel Type": CAROUSEL_TYPE_LABEL[bundle.carousel.type],
+            "Carousel JSON":
+              bundle.carousel.type === "aspiration" && bundle.carousel.aspiration
+                ? JSON.stringify(bundle.carousel.aspiration)
+                : undefined,
+            "Created Date": today,
+          });
+        } catch (scriptErr) {
+          // Roll back the just-created Tool so a Script-create failure
+          // (schema drift, transient API error) doesn't strand a queued row
+          // that the queue route hides but the cron still counts toward the
+          // QUEUE_CAP and the duplicate-name exclude list.
+          try {
+            await deleteRecord("Tools", toolRec.id);
+          } catch (rollbackErr) {
+            console.error(
+              `failed to roll back orphan Tool ${toolRec.id} (${tool.name}):`,
+              rollbackErr,
+            );
+          }
+          throw scriptErr;
+        }
 
         excludeNames.push(tool.name);
         out.persisted++;
