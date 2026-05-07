@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { listRecords } from "@/lib/airtable";
+import { publishCarouselToTikTok } from "@/lib/video-publishers";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Bumped — IG container poll + TikTok carousel publish + status poll can
+// each run for ~60s. 180s gives headroom for both platforms back-to-back.
+export const maxDuration = 180;
 
 type ConnectionFields = {
   Platform?: string;
@@ -106,7 +109,21 @@ export async function POST(req: NextRequest) {
       throw new Error(`Publish failed: ${JSON.stringify(publishData).slice(0, 200)}`);
     }
 
-    // Step 4: Clean up blobs
+    // Step 4: TikTok carousel (best effort — IG already succeeded).
+    let tiktok: { success: true; publishId: string; postId?: string; url?: string }
+      | { success: false; error: string }
+      | null = null;
+    try {
+      const tt = await publishCarouselToTikTok(slideUrls, caption || "", "");
+      tiktok = { success: true, ...tt };
+    } catch (ttErr: unknown) {
+      tiktok = {
+        success: false,
+        error: ttErr instanceof Error ? ttErr.message : String(ttErr),
+      };
+    }
+
+    // Step 5: Clean up blobs (after both platforms have pulled)
     if (cleanupBlobs) {
       await Promise.all(
         slideUrls.map(async (url) => {
@@ -123,6 +140,7 @@ export async function POST(req: NextRequest) {
       success: true,
       mediaId: publishData.id,
       url: `https://www.instagram.com/p/${publishData.id}`,
+      tiktok,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

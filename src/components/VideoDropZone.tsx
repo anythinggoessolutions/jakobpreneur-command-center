@@ -215,7 +215,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
 
   const [publishing, setPublishing] = useState(false);
   const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string; scheduled?: boolean; scheduledDate?: string; scheduledTime?: string; scheduledDatetime?: string; platforms?: string[] }> | null>(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram"]));
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram", "tiktok"]));
 
   const togglePlatform = (p: string) => {
     setSelectedPlatforms((prev) => {
@@ -403,6 +403,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                   { key: "youtube", label: "YouTube", color: "red" },
                   { key: "x", label: "X (Tweets)", color: "zinc" },
                   { key: "instagram", label: "Instagram Reels", color: "purple" },
+                  { key: "tiktok", label: "TikTok", color: "pink" },
                 ].map((p) => (
                   <button
                     key={p.key}

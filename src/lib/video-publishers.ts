@@ -12,6 +12,7 @@
 
 import { listRecords, updateRecord } from "@/lib/airtable";
 import { put, del } from "@vercel/blob";
+import { getValidTikTokToken } from "@/lib/tiktok-oauth";
 
 type ConnectionFields = {
   Platform?: string;
@@ -148,6 +149,186 @@ export async function publishVideoToYouTube(
   return {
     videoId,
     url: videoId ? `https://www.youtube.com/shorts/${videoId}` : "",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// TikTok
+// ---------------------------------------------------------------------------
+
+const TIKTOK_INIT_VIDEO_URL =
+  "https://open.tiktokapis.com/v2/post/publish/video/init/";
+const TIKTOK_INIT_CONTENT_URL =
+  "https://open.tiktokapis.com/v2/post/publish/content/init/";
+const TIKTOK_STATUS_URL =
+  "https://open.tiktokapis.com/v2/post/publish/status/fetch/";
+
+async function pollTikTokPublishStatus(
+  accessToken: string,
+  publishId: string,
+  timeoutMs: number = 120000,
+): Promise<{ shareUrl?: string; postId?: string }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const res = await fetch(TIKTOK_STATUS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify({ publish_id: publishId }),
+    });
+    if (!res.ok) {
+      throw new Error(
+        `TikTok status fetch failed (${res.status}): ${(await res.text()).slice(0, 300)}`,
+      );
+    }
+    const data = await res.json();
+    const status = data?.data?.status as string | undefined;
+    if (status === "PUBLISH_COMPLETE") {
+      // TikTok's status response includes publicaly_available_post_id and
+      // sometimes a share URL. Both are best-effort; absence is not fatal.
+      const postId =
+        (data?.data?.publicaly_available_post_id?.[0] as string | undefined) ||
+        (data?.data?.publicly_available_post_id?.[0] as string | undefined);
+      const shareUrl = data?.data?.share_url as string | undefined;
+      return { postId, shareUrl };
+    }
+    if (status === "FAILED") {
+      const reason =
+        data?.data?.fail_reason ||
+        data?.error?.message ||
+        JSON.stringify(data).slice(0, 300);
+      throw new Error(`TikTok publish FAILED: ${reason}`);
+    }
+    // Other statuses (PROCESSING_DOWNLOAD / PROCESSING_UPLOAD) → keep polling.
+  }
+  throw new Error("TikTok publish status timed out after 2min");
+}
+
+export async function publishVideoToTikTok(
+  blobUrl: string,
+  title: string,
+): Promise<{ publishId: string; postId?: string; url?: string }> {
+  const accessToken = await getValidTikTokToken();
+
+  const initRes = await fetch(TIKTOK_INIT_VIDEO_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=UTF-8",
+    },
+    body: JSON.stringify({
+      post_info: {
+        title: title.slice(0, 2200),
+        privacy_level: "PUBLIC_TO_EVERYONE",
+        disable_duet: false,
+        disable_comment: false,
+        disable_stitch: false,
+        video_cover_timestamp_ms: 1000,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        video_url: blobUrl,
+      },
+    }),
+  });
+
+  if (!initRes.ok) {
+    const text = (await initRes.text()).slice(0, 500);
+    // Common cause: the Vercel Blob domain isn't in TikTok's URL Properties
+    // verified-domain list. Surface this hint in the error so the user knows
+    // exactly which lever to pull in the TikTok dev portal.
+    const hint = /url|domain|prefix/i.test(text)
+      ? " (likely cause: blob domain `*.public.blob.vercel-storage.com` not verified in TikTok dev portal → URL Properties)"
+      : "";
+    throw new Error(`TikTok video init failed (${initRes.status}): ${text}${hint}`);
+  }
+
+  const initData = await initRes.json();
+  if (initData.error?.code && initData.error.code !== "ok") {
+    throw new Error(
+      `TikTok video init error: ${initData.error.code} - ${initData.error.message}`,
+    );
+  }
+  const publishId = initData?.data?.publish_id as string | undefined;
+  if (!publishId) {
+    throw new Error(
+      `TikTok video init: no publish_id (${JSON.stringify(initData).slice(0, 300)})`,
+    );
+  }
+
+  const result = await pollTikTokPublishStatus(accessToken, publishId);
+  return {
+    publishId,
+    postId: result.postId,
+    url: result.shareUrl,
+  };
+}
+
+export async function publishCarouselToTikTok(
+  slideUrls: string[],
+  title: string,
+  description: string = "",
+): Promise<{ publishId: string; postId?: string; url?: string }> {
+  if (slideUrls.length < 1 || slideUrls.length > 35) {
+    throw new Error(
+      `TikTok photo carousel requires 1-35 images (got ${slideUrls.length})`,
+    );
+  }
+  const accessToken = await getValidTikTokToken();
+
+  const initRes = await fetch(TIKTOK_INIT_CONTENT_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json; charset=UTF-8",
+    },
+    body: JSON.stringify({
+      post_info: {
+        title: title.slice(0, 90),
+        description: description.slice(0, 2200),
+        privacy_level: "PUBLIC_TO_EVERYONE",
+        disable_comment: false,
+        auto_add_music: true,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        photo_cover_index: 0,
+        photo_images: slideUrls,
+      },
+      post_mode: "DIRECT_POST",
+      media_type: "PHOTO",
+    }),
+  });
+
+  if (!initRes.ok) {
+    const text = (await initRes.text()).slice(0, 500);
+    const hint = /url|domain|prefix/i.test(text)
+      ? " (likely cause: blob domain `*.public.blob.vercel-storage.com` not verified in TikTok dev portal → URL Properties)"
+      : "";
+    throw new Error(`TikTok carousel init failed (${initRes.status}): ${text}${hint}`);
+  }
+
+  const initData = await initRes.json();
+  if (initData.error?.code && initData.error.code !== "ok") {
+    throw new Error(
+      `TikTok carousel init error: ${initData.error.code} - ${initData.error.message}`,
+    );
+  }
+  const publishId = initData?.data?.publish_id as string | undefined;
+  if (!publishId) {
+    throw new Error(
+      `TikTok carousel init: no publish_id (${JSON.stringify(initData).slice(0, 300)})`,
+    );
+  }
+
+  const result = await pollTikTokPublishStatus(accessToken, publishId);
+  return {
+    publishId,
+    postId: result.postId,
+    url: result.shareUrl,
   };
 }
 

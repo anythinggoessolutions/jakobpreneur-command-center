@@ -68,6 +68,94 @@ export async function exchangeTikTokCode(code: string, redirectUri: string) {
   };
 }
 
+/**
+ * Refresh a TikTok access token. TikTok access tokens last 24h; refresh
+ * tokens last 365d. Both are rotated on refresh — the response includes a
+ * NEW refresh_token that must replace the old one in storage.
+ */
+export async function refreshTikTokToken(refreshToken: string): Promise<{
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}> {
+  const { clientKey, clientSecret } = getCredentials();
+
+  const res = await fetch(TIKTOK_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_key: clientKey,
+      client_secret: clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `TikTok token refresh failed (${res.status}): ${await res.text()}`,
+    );
+  }
+
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(`TikTok refresh error: ${data.error} - ${data.error_description}`);
+  }
+
+  return {
+    accessToken: data.access_token as string,
+    refreshToken: data.refresh_token as string,
+    expiresIn: data.expires_in as number,
+  };
+}
+
+/**
+ * Read TikTok creds from Airtable Connections, refreshing the access token
+ * if it's within 5 minutes of expiry. The refresh token rotates on every
+ * refresh, so both tokens get persisted back.
+ */
+export async function getValidTikTokToken(): Promise<string> {
+  const { listRecords, updateRecord } = await import("@/lib/airtable");
+
+  type ConnectionFields = {
+    Platform?: string;
+    "Access Token"?: string;
+    "Refresh Token"?: string;
+    "Token Expiry"?: string;
+    Status?: string;
+  };
+
+  const records = await listRecords<ConnectionFields>("Connections");
+  const tt = records.find(
+    (r) => r.fields.Platform === "TikTok" && r.fields.Status === "connected",
+  );
+  if (!tt) throw new Error("TikTok not connected");
+
+  const accessToken = tt.fields["Access Token"] || "";
+  const refreshToken = tt.fields["Refresh Token"] || "";
+  const tokenExpiry = tt.fields["Token Expiry"] || "";
+
+  if (!refreshToken) throw new Error("No TikTok refresh token — reconnect TikTok");
+
+  const expiryMs = tokenExpiry ? Date.parse(tokenExpiry) : 0;
+  const fiveMinFromNow = Date.now() + 5 * 60 * 1000;
+
+  if (accessToken && expiryMs > fiveMinFromNow) {
+    return accessToken;
+  }
+
+  const refreshed = await refreshTikTokToken(refreshToken);
+  const newExpiry = new Date(Date.now() + refreshed.expiresIn * 1000).toISOString();
+
+  await updateRecord<ConnectionFields>("Connections", tt.id, {
+    "Access Token": refreshed.accessToken,
+    "Refresh Token": refreshed.refreshToken,
+    "Token Expiry": newExpiry,
+  });
+
+  return refreshed.accessToken;
+}
+
 export async function fetchTikTokUserInfo(accessToken: string) {
   const res = await fetch(
     "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",

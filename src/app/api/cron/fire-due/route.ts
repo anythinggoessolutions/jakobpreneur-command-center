@@ -6,6 +6,8 @@ import { put, del } from "@vercel/blob";
 import {
   publishVideoToYouTube,
   publishVideoToInstagram,
+  publishVideoToTikTok,
+  publishCarouselToTikTok,
 } from "@/lib/video-publishers";
 
 export const dynamic = "force-dynamic";
@@ -262,7 +264,22 @@ export async function GET(req: NextRequest) {
           throw new Error(`publish failed: ${JSON.stringify(publishData).slice(0, 200)}`);
         }
 
-        // Cleanup blobs
+        // TikTok carousel — best effort. Failure here doesn't block the IG
+        // post that already succeeded. Slide URLs are still alive at this
+        // point; cleanup happens after both platforms attempt.
+        let tiktokResult: Awaited<ReturnType<typeof publishCarouselToTikTok>> | null = null;
+        let tiktokError: string | null = null;
+        try {
+          tiktokResult = await publishCarouselToTikTok(
+            slideUrls,
+            spec.headline || "",
+            caption,
+          );
+        } catch (ttErr: unknown) {
+          tiktokError = ttErr instanceof Error ? ttErr.message : String(ttErr);
+        }
+
+        // Cleanup blobs (after both IG and TT have read them)
         await Promise.all(
           slideUrls.map(async (url) => {
             try {
@@ -278,9 +295,16 @@ export async function GET(req: NextRequest) {
           "Posted ID": publishData.id,
           "Posted URL": `https://www.instagram.com/p/${publishData.id}`,
           "Posted At": now.toISOString(),
+          ...(tiktokError ? { Error: `IG ok, TikTok failed: ${tiktokError.slice(0, 400)}` } : {}),
         });
         summary.carousels.fired++;
-        summary.carousels.results.push({ id: rec.id, mediaId: publishData.id });
+        summary.carousels.results.push({
+          id: rec.id,
+          mediaId: publishData.id,
+          tiktok: tiktokResult
+            ? { success: true, ...tiktokResult }
+            : { success: false, error: tiktokError },
+        });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         await updateRecord<VideoFields>("Videos", rec.id, {
@@ -322,6 +346,7 @@ export async function GET(req: NextRequest) {
           blobUrl?: string;
           ytTitle?: string;
           ytDescription?: string;
+          tiktokCaption?: string;
           platforms?: string[];
           pendingPlatforms?: string[];
           attemptCount?: number;
@@ -374,6 +399,28 @@ export async function GET(req: NextRequest) {
             const msg = err instanceof Error ? err.message : String(err);
             postResults.instagram = { success: false, error: msg };
             stillPending.push("Instagram");
+          }
+        }
+
+        // TikTok
+        if (pending.includes("TikTok")) {
+          try {
+            const tt = await publishVideoToTikTok(
+              spec.blobUrl,
+              spec.tiktokCaption ||
+                rec.fields["IG Caption"] ||
+                rec.fields["Tool Name"] ||
+                "",
+            );
+            postResults.tiktok = { success: true, ...tt };
+            if (!postedUrl && tt.url) {
+              postedUrl = tt.url;
+              postedId = tt.postId || tt.publishId;
+            }
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            postResults.tiktok = { success: false, error: msg };
+            stillPending.push("TikTok");
           }
         }
 
