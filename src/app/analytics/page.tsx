@@ -158,6 +158,12 @@ export default function AnalyticsPage() {
                         <StatRow label="Followers" value={formatNumber(p.followers)} />
                         <StatRow label="Tweets" value={formatNumber(p.posts)} />
                       </>
+                    ) : p.platform === "TikTok" ? (
+                      <>
+                        <StatRow label="Followers" value={formatNumber(p.followers)} />
+                        <StatRow label="Total Likes" value={formatNumber(p.views)} />
+                        <StatRow label="Videos" value={formatNumber(p.posts)} />
+                      </>
                     ) : (
                       <>
                         <StatRow label="Followers" value={formatNumber(p.followers)} />

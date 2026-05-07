@@ -5,7 +5,12 @@
 const TIKTOK_AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
 const TIKTOK_TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 
-const SCOPES = "user.info.basic,video.publish,video.upload";
+// user.info.profile gives username + bio + verified state.
+// user.info.stats gives follower_count / following_count / likes_count /
+// video_count — required for the /api/analytics route's TikTok card.
+// Adding these scopes requires the user to reconnect TikTok once.
+const SCOPES =
+  "user.info.basic,user.info.profile,user.info.stats,video.publish,video.upload";
 
 function getCredentials() {
   const clientKey = process.env.TIKTOK_CLIENT_KEY;

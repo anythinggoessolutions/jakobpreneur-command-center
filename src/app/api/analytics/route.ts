@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { listRecords } from "@/lib/airtable";
 import { getValidYouTubeToken } from "@/lib/google-oauth";
+import { getValidTikTokToken } from "@/lib/tiktok-oauth";
 import { twitterApiRequest } from "@/lib/twitter-api";
 
 export const dynamic = "force-dynamic";
@@ -74,6 +75,34 @@ async function fetchYouTubeStats(accessToken: string): Promise<Partial<PlatformS
   }
 }
 
+async function fetchTikTokStats(accessToken: string): Promise<Partial<PlatformStats>> {
+  try {
+    const res = await fetch(
+      "https://open.tiktokapis.com/v2/user/info/?fields=open_id,username,display_name,follower_count,following_count,likes_count,video_count",
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      return { error: `TikTok API error (${res.status}): ${err.slice(0, 100)}` };
+    }
+    const data = await res.json();
+    const user = data?.data?.user;
+    if (!user) return { error: "No TikTok user data returned" };
+
+    // TikTok's likes_count is "total likes received across all videos" — the
+    // closest analog to YouTube's lifetime view count. Surface it as `views`
+    // so the existing UI card has a populated headline number.
+    return {
+      followers: user.follower_count ?? null,
+      posts: user.video_count ?? null,
+      views: user.likes_count ?? null,
+      username: user.username || user.display_name || "",
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function fetchXStats(): Promise<Partial<PlatformStats>> {
   try {
     const res = await twitterApiRequest(
@@ -134,6 +163,15 @@ export async function GET() {
         try {
           const freshToken = await getValidYouTubeToken();
           const stats = await fetchYouTubeStats(freshToken);
+          results.push({ ...base, ...stats });
+        } catch (err) {
+          results.push({ ...base, error: err instanceof Error ? err.message : String(err) });
+        }
+      } else if (platform === "TikTok") {
+        // Auto-refresh TikTok token (24h access, 365d refresh)
+        try {
+          const freshToken = await getValidTikTokToken();
+          const stats = await fetchTikTokStats(freshToken);
           results.push({ ...base, ...stats });
         } catch (err) {
           results.push({ ...base, error: err instanceof Error ? err.message : String(err) });
