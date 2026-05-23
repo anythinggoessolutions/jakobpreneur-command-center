@@ -15,6 +15,8 @@ interface VaultGridProps {
   kind: VaultKind;
   title: string;
   description: string;
+  /** Start collapsed — click header to expand. */
+  defaultCollapsed?: boolean;
 }
 
 const KIND_CONFIG: Record<
@@ -76,13 +78,14 @@ const KIND_CONFIG: Record<
  * Each tile renders a kind-appropriate preview (img / video / audio player)
  * with a delete button that cleans up both the blob and the Airtable row.
  */
-export default function GodTextVaultGrid({ kind, title, description }: VaultGridProps) {
+export default function GodTextVaultGrid({ kind, title, description, defaultCollapsed = false }: VaultGridProps) {
   const config = KIND_CONFIG[kind];
   const [records, setRecords] = useState<VaultRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extraValues, setExtraValues] = useState<Record<string, string>>({});
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(async () => {
@@ -177,15 +180,26 @@ export default function GodTextVaultGrid({ kind, title, description }: VaultGrid
 
   return (
     <div className={`rounded-xl border ${config.accentClass} p-4`}>
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-bold text-zinc-900">{title}</h3>
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="flex items-start justify-between w-full text-left cursor-pointer"
+      >
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-zinc-900">
+            {title}
+            <span className="ml-1.5 text-zinc-400 font-normal">
+              {collapsed ? "▸" : "▾"}
+            </span>
+          </h3>
           <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
         </div>
-        <div className="text-[11px] text-zinc-500 font-medium">
+        <div className="text-[11px] text-zinc-500 font-medium shrink-0 ml-3">
           {records.length} {records.length === 1 ? "item" : "items"}
         </div>
-      </div>
+      </button>
+
+      {collapsed ? null : <div className="mt-3">
 
       {/* Extra-field selectors (Platform for ui-refs, Mood for music) */}
       {config.extraFields && config.extraFields.length > 0 && (
@@ -279,6 +293,8 @@ export default function GodTextVaultGrid({ kind, title, description }: VaultGrid
           ))}
         </div>
       )}
+
+    </div>}
     </div>
   );
 }

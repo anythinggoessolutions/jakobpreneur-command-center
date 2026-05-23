@@ -208,6 +208,7 @@ export default function GodTextAIPage() {
             kind="rizz"
             title="Rizz Vault"
             description="Screenshots of viral text-rizz conversations. Claude studies these as style reference when generating new scripts."
+            defaultCollapsed
           />
         </section>
 
@@ -217,6 +218,7 @@ export default function GodTextAIPage() {
             kind="ui-refs"
             title="Platform UI References"
             description="Real chat UI screenshots — Hinge, Instagram DMs, Tinder, iMessage. Design reference for the phone-mockup component. Upload once, used forever."
+            defaultCollapsed
           />
         </section>
 
@@ -226,6 +228,7 @@ export default function GodTextAIPage() {
             kind="hype-clips"
             title="Hype Clip Vault"
             description="Short viral / meme video clips inserted between conversation beats. Random selection per video."
+            defaultCollapsed
           />
         </section>
 
@@ -235,6 +238,7 @@ export default function GodTextAIPage() {
             kind="music"
             title="Music Vault"
             description="Background music. One track plays as a base layer through the full video; hype-clip audio layers on top."
+            defaultCollapsed
           />
         </section>
 
