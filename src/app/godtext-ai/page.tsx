@@ -140,30 +140,16 @@ export default function GodTextAIPage() {
   const buildFrames = (conv: GeneratedConversation) => {
     const frames: Array<
       | { kind: "phone"; messages: ChatMessage[] }
-      | { kind: "gen"; womanMessage: string; aiResponse: string; revealed: boolean }
+      | { kind: "cooking" }
     > = [];
 
     const visible: ChatMessage[] = [];
     for (let i = 0; i < conv.messages.length; i++) {
       const m = conv.messages[i];
       if (m.sender === "man" && m.show_godtext_ui) {
-        // Find the previous woman message — that's what the user
-        // "screenshotted" before asking GodText for a reply.
-        const prevWoman = [...conv.messages.slice(0, i)]
-          .reverse()
-          .find((x) => x.sender === "woman");
-        frames.push({
-          kind: "gen",
-          womanMessage: prevWoman?.text || "(opener)",
-          aiResponse: m.text,
-          revealed: false,
-        });
-        frames.push({
-          kind: "gen",
-          womanMessage: prevWoman?.text || "(opener)",
-          aiResponse: m.text,
-          revealed: true,
-        });
+        // Show the cooking loading screen, then cut straight back
+        // to the phone with the message visible. No reveal screen.
+        frames.push({ kind: "cooking" });
       }
       visible.push({ sender: m.sender, text: m.text });
       frames.push({ kind: "phone", messages: [...visible] });
@@ -406,17 +392,11 @@ export default function GodTextAIPage() {
                     messages={currentFrame.messages}
                     scale={0.8}
                   />
-                ) : currentFrame?.kind === "gen" ? (
+                ) : currentFrame?.kind === "cooking" ? (
                   videoTheme === "white" ? (
-                    <GodTextCookingWhite
-                      phase={currentFrame.revealed ? "reveal" : "cooking"}
-                      scale={0.8}
-                    />
+                    <GodTextCookingWhite phase="cooking" scale={0.8} />
                   ) : (
-                    <GodTextCookingDark
-                      phase={currentFrame.revealed ? "reveal" : "cooking"}
-                      scale={0.8}
-                    />
+                    <GodTextCookingDark phase="cooking" scale={0.8} />
                   )
                 ) : null}
               </div>

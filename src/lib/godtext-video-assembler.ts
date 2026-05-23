@@ -129,7 +129,8 @@ export async function assembleVideo(
       // If this man message has show_godtext_ui, render the cooking sequence
       // BEFORE showing his message land in the chat.
       if (msg.sender === "man" && msg.show_godtext_ui) {
-        // Cooking steps (3 frames)
+        // Cooking steps (3 loading frames — no reveal screen, video
+        // cuts straight back to the phone conversation after cooking)
         for (let step = 0; step < 3; step++) {
           const cookPath = path.join(
             jobDir,
@@ -144,19 +145,6 @@ export async function assembleVideo(
           segments.push({ kind: "image", path: cookPath, duration: TIMING.cookingStep });
           frameIdx++;
         }
-
-        // Reveal frame
-        const revealPath = path.join(
-          jobDir,
-          `frame-${String(frameIdx).padStart(4, "0")}-reveal.png`,
-        );
-        await screenshotFrame(page, baseUrl, revealPath, {
-          type: "cooking",
-          theme,
-          phase: "reveal",
-        });
-        segments.push({ kind: "image", path: revealPath, duration: TIMING.reveal });
-        frameIdx++;
       }
 
       // Add message to visible stack and render the phone screen
