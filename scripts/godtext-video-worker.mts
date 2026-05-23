@@ -242,6 +242,7 @@ type ConversationMsg = {
 type Conversation = {
   platform: string;
   hookText: string;
+  womanName?: string;
   messages: ConversationMsg[];
 };
 
@@ -413,6 +414,7 @@ async function buildVideo(
       type: "phone",
       platform: conversation.platform,
       messages: JSON.stringify(visibleMessages),
+      ...(conversation.womanName ? { womanName: conversation.womanName } : {}),
     });
     segments.push({ kind: "image", path: phonePath, duration: TIMING.message });
     frameIdx++;

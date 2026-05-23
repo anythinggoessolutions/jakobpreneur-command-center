@@ -27,6 +27,11 @@ export const GodTextConversationSchema = z.object({
   platform: z
     .enum(["Hinge", "Instagram", "Tinder", "iMessage"])
     .describe("Which app/platform UI this conversation should render in."),
+  womanName: z
+    .string()
+    .describe(
+      "The woman's first name displayed in the chat header. Pick a different, common first name every time — never repeat the same name across calls. Examples: Sofia, Jess, Aaliyah, Priya, Chloe, Mia, Lauren, Destiny, Nadia, etc.",
+    ),
   hookText: z
     .string()
     .describe(
@@ -89,7 +94,10 @@ Hook text rules:
 - NEVER mention JakobPreneur, the developer, or any other brand. GodText AI is the only brand referenced.
 
 Platform rule:
-- Pick the platform that best fits the scenario. Hinge for dating-app openers, Instagram for story replies/DMs, Tinder for matches, iMessage for post-number conversations.`;
+- Pick the platform that best fits the scenario. Hinge for dating-app openers, Instagram for story replies/DMs, Tinder for matches, iMessage for post-number conversations.
+
+Name rule:
+- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Vary ethnicity, length, and vibe — Sofia, Jess, Aaliyah, Priya, Chloe, Destiny, Nadia, Lauren, Mia, etc. No two consecutive scripts should share a name.`;
 
 /**
  * Generate a conversation script using a curated set of rizz-vault images

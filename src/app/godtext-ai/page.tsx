@@ -13,6 +13,7 @@ import GodTextCookingDark from "@/components/GodTextCookingDark";
 type GeneratedConversation = {
   scenario: string;
   platform: PhonePlatform;
+  womanName?: string;
   hookText: string;
   messages: {
     sender: "man" | "woman";
@@ -425,6 +426,7 @@ export default function GodTextAIPage() {
                   <GodTextPhoneMockup
                     platform={conversation.platform}
                     messages={currentFrame.messages}
+                    womanName={conversation.womanName}
                     scale={0.8}
                   />
                 ) : currentFrame?.kind === "cooking" ? (

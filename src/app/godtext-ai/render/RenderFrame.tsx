@@ -98,6 +98,7 @@ export default function RenderFrame() {
 
   // Default: phone conversation frame
   const platform = (params.get("platform") || "iMessage") as PhonePlatform;
+  const womanName = params.get("womanName") || undefined;
   let messages: ChatMessage[] = [];
   try {
     messages = JSON.parse(params.get("messages") || "[]");
@@ -133,6 +134,7 @@ export default function RenderFrame() {
         <GodTextPhoneMockup
           platform={platform}
           messages={messages}
+          womanName={womanName}
           scale={PHONE_SCALE}
         />
       </div>
