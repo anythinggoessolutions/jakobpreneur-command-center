@@ -172,11 +172,12 @@ const PW_MODULE = ["play", "wright"].join("");
 
 type PlaywrightPage = {
   setViewportSize: (size: { width: number; height: number }) => Promise<void>;
-  goto: (url: string, opts?: { waitUntil?: string }) => Promise<unknown>;
+  goto: (url: string, opts?: { waitUntil?: string; timeout?: number }) => Promise<unknown>;
   screenshot: (opts: {
     type?: string;
     clip?: { x: number; y: number; width: number; height: number };
   }) => Promise<Buffer>;
+  evaluate: (expr: string) => Promise<unknown>;
   close: () => Promise<void>;
 };
 
@@ -205,7 +206,16 @@ async function screenshotFrame(
   for (const [k, v] of Object.entries(params)) {
     url.searchParams.set(k, v);
   }
-  await page.goto(url.toString(), { waitUntil: "networkidle" });
+  await page.goto(url.toString(), { waitUntil: "networkidle", timeout: 60000 });
+
+  // Verify the page rendered correctly (not a Next.js error overlay)
+  const hasError = await page.evaluate(
+    `document.querySelector('[data-nextjs-dialog-overlay]') !== null || document.body.innerText.includes('Runtime Error')`,
+  );
+  if (hasError) {
+    throw new Error(`Render page showed an error for: ${url.searchParams.toString()}`);
+  }
+
   await new Promise((r) => setTimeout(r, 500));
   const buffer = await page.screenshot({
     type: "png",
@@ -235,12 +245,35 @@ type Conversation = {
   messages: ConversationMsg[];
 };
 
+async function warmUpRenderPage(baseUrl: string): Promise<void> {
+  // Hit the render page via HTTP first so Turbopack compiles it.
+  // Playwright will timeout on error pages if the page isn't ready.
+  console.log("   Warming up render page...");
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const res = await fetch(`${baseUrl}/godtext-ai/render?type=hook&hook=warmup`);
+      if (res.ok) {
+        console.log("   Render page ready ✓");
+        return;
+      }
+      console.log(`   Render page returned ${res.status}, retrying...`);
+    } catch {
+      console.log(`   Dev server not responding, retrying in 3s...`);
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  throw new Error("Render page failed to compile after 10 attempts. Is 'npm run dev' running?");
+}
+
 async function buildVideo(
   conversation: Conversation,
   theme: string,
   jobDir: string,
 ): Promise<string> {
   const baseUrl = "http://localhost:3000";
+
+  // Make sure the render page is compiled before launching Playwright
+  await warmUpRenderPage(baseUrl);
 
   const browser = await launchBrowser();
   const page = await browser.newPage();
