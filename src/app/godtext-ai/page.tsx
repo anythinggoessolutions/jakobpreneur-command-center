@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import GodTextVaultGrid from "@/components/GodTextVaultGrid";
 import GodTextPhoneMockup, {
   type PhonePlatform,
@@ -41,8 +41,38 @@ export default function GodTextAIPage() {
   } | null>(null);
   const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
   const [cookingPreview, setCookingPreview] = useState<"off" | "white-cooking" | "white-reveal" | "dark-cooking" | "dark-reveal">("off");
+  const [savedScripts, setSavedScripts] = useState<
+    { id: string; name: string; platform: string; hookText: string; conversation: GeneratedConversation | null; createdTime: string }[]
+  >([]);
+  const [loadingScripts, setLoadingScripts] = useState(false);
 
   const conversation = conversations[activeConvIdx] ?? null;
+
+  const fetchSavedScripts = useCallback(async () => {
+    setLoadingScripts(true);
+    try {
+      const res = await fetch("/api/godtext/scripts/list", { cache: "no-store" });
+      const data = await res.json();
+      if (res.ok) setSavedScripts(data.scripts || []);
+    } catch {
+      // non-fatal
+    } finally {
+      setLoadingScripts(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSavedScripts();
+  }, [fetchSavedScripts]);
+
+  const loadScript = (script: typeof savedScripts[number]) => {
+    if (!script.conversation) return;
+    setConversations([script.conversation]);
+    setActiveConvIdx(0);
+    setPreviewFrame(0);
+    setVideoResult(null);
+    setAssembleError(null);
+  };
 
   const runGenerate = async () => {
     setGenerating(true);
@@ -71,6 +101,7 @@ export default function GodTextAIPage() {
       if (data.failed > 0) {
         setGenError(`${data.succeeded} succeeded, ${data.failed} failed`);
       }
+      fetchSavedScripts();
     } catch (err) {
       setGenError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -188,6 +219,58 @@ export default function GodTextAIPage() {
             title="Music Vault"
             description="Background music. One track plays as a base layer through the full video; hype-clip audio layers on top."
           />
+        </section>
+
+        {/* --- Section 2.75: Saved Scripts --- */}
+        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900">Saved Scripts</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Every generated script is saved automatically. Click one to load it back into the preview.
+              </p>
+            </div>
+            <button
+              onClick={fetchSavedScripts}
+              disabled={loadingScripts}
+              className="text-xs text-zinc-500 hover:text-zinc-700 disabled:opacity-40"
+            >
+              {loadingScripts ? "Loading…" : "Refresh"}
+            </button>
+          </div>
+          {savedScripts.length === 0 ? (
+            <div className="text-xs text-zinc-400">
+              {loadingScripts ? "Loading…" : "No saved scripts yet. Generate one below."}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+              {savedScripts.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => loadScript(s)}
+                  disabled={!s.conversation}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 hover:bg-zinc-100 px-3 py-2 text-left transition-colors disabled:opacity-40 cursor-pointer"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-zinc-800 truncate">
+                      {s.name}
+                    </div>
+                    <div className="text-[11px] text-zinc-400 truncate">
+                      {s.hookText}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-zinc-200 text-zinc-600">
+                      {s.platform}
+                    </span>
+                    <span className="text-[10px] text-zinc-400">
+                      {new Date(s.createdTime).toLocaleDateString()}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* --- Section 3: Video Generator --- */}
