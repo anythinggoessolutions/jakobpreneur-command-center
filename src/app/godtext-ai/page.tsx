@@ -141,15 +141,16 @@ export default function GodTextAIPage() {
     const frames: Array<
       | { kind: "phone"; messages: ChatMessage[] }
       | { kind: "cooking" }
+      | { kind: "reply"; text: string }
     > = [];
 
     const visible: ChatMessage[] = [];
     for (let i = 0; i < conv.messages.length; i++) {
       const m = conv.messages[i];
       if (m.sender === "man" && m.show_godtext_ui) {
-        // Show the cooking loading screen, then cut straight back
-        // to the phone with the message visible. No reveal screen.
+        // Cooking loading → reply screen → phone with message sent
         frames.push({ kind: "cooking" });
+        frames.push({ kind: "reply", text: m.text });
       }
       visible.push({ sender: m.sender, text: m.text });
       frames.push({ kind: "phone", messages: [...visible] });
@@ -398,6 +399,12 @@ export default function GodTextAIPage() {
                   ) : (
                     <GodTextCookingDark phase="cooking" scale={0.8} />
                   )
+                ) : currentFrame?.kind === "reply" ? (
+                  <ReplyPreview
+                    text={currentFrame.text}
+                    theme={videoTheme}
+                    scale={0.8}
+                  />
                 ) : null}
               </div>
             </div>
@@ -522,6 +529,142 @@ export default function GodTextAIPage() {
             phase (after FFmpeg assembly + posting).
           </p>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/** Inline preview of the "Send this" reply screen shown in the video between
+ *  cooking and the phone conversation. Mirrors the RenderFrame ReplyFrame. */
+function ReplyPreview({
+  text,
+  theme,
+  scale,
+}: {
+  text: string;
+  theme: "dark" | "white";
+  scale: number;
+}) {
+  const isDark = theme === "dark";
+  const bg = isDark ? "#0C0C0E" : "#F5F1EB";
+  const accent = isDark ? "#FF4400" : "#E03E00";
+  const textColor = isDark ? "#fff" : "#1A1208";
+  const mutedColor = isDark ? "rgba(255,255,255,0.4)" : "rgba(26,18,8,0.4)";
+  const cardBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(26,18,8,0.03)";
+  const cardBorder = isDark
+    ? "1.5px solid rgba(255,68,0,0.2)"
+    : "1.5px solid rgba(224,62,0,0.15)";
+
+  return (
+    <div
+      style={{
+        width: 390 * scale,
+        height: 844 * scale,
+        background: bg,
+        borderRadius: 32 * scale,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {/* Background glow */}
+      <div
+        style={{
+          position: "absolute",
+          width: 260 * scale,
+          height: 260 * scale,
+          borderRadius: "50%",
+          background: `radial-gradient(circle, ${accent}15 0%, transparent 70%)`,
+          top: "45%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 18 * scale,
+          padding: `0 ${30 * scale}px`,
+          maxWidth: 350 * scale,
+        }}
+      >
+        {/* Wordmark */}
+        <div
+          style={{
+            fontSize: 18 * scale,
+            fontWeight: 800,
+            color: textColor,
+            letterSpacing: "-0.02em",
+            fontFamily: isDark ? "'Syne', sans-serif" : "'Playfair Display', Georgia, serif",
+          }}
+        >
+          GodText{" "}
+          <span style={{ color: accent }}>AI</span>
+        </div>
+
+        {/* Label */}
+        <div
+          style={{
+            fontSize: 9 * scale,
+            fontWeight: 700,
+            color: mutedColor,
+            letterSpacing: "0.15em",
+            textTransform: "uppercase" as const,
+            fontFamily: isDark ? "'DM Sans', sans-serif" : "'Plus Jakarta Sans', sans-serif",
+          }}
+        >
+          Send this
+        </div>
+
+        {/* Reply card */}
+        <div
+          style={{
+            width: "100%",
+            borderRadius: 10 * scale,
+            padding: `${18 * scale}px ${20 * scale}px`,
+            background: cardBg,
+            border: cardBorder,
+          }}
+        >
+          <p
+            style={{
+              fontSize: 16 * scale,
+              fontWeight: 700,
+              color: textColor,
+              lineHeight: 1.35,
+              margin: 0,
+              textAlign: "center" as const,
+              fontFamily: isDark ? "'DM Sans', sans-serif" : "'Plus Jakarta Sans', sans-serif",
+            }}
+          >
+            {text}
+          </p>
+        </div>
+
+        {/* Send button */}
+        <div
+          style={{
+            padding: `${7 * scale}px ${24 * scale}px`,
+            borderRadius: 8 * scale,
+            background: accent,
+            color: "#fff",
+            fontSize: 10 * scale,
+            fontWeight: 700,
+            letterSpacing: "0.02em",
+            fontFamily: isDark ? "'DM Sans', sans-serif" : "'Plus Jakarta Sans', sans-serif",
+          }}
+        >
+          Send it
+        </div>
       </div>
     </div>
   );

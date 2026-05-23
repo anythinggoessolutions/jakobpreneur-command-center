@@ -6,7 +6,8 @@
  *   1.  Hook frame     — 2.5s title card with the hook text
  *   2.  Phone beats    — conversation messages appear one by one (~2s each)
  *   3.  Cooking beats  — GodText AI cooking screen at show_godtext_ui moments
- *       (3 loading steps + 1 reveal = 4 frames, ~1s each = ~4s total)
+ *       (3 loading steps × 1s each = 3s)
+ *   3b. Reply frame    — "Send this" screen showing the generated message (~2s)
  *   4.  Hype clips     — spliced at high/maximum escalation woman messages
  *   5.  Music layer    — random track from the Music Vault at 15% volume
  *
@@ -76,7 +77,7 @@ const TIMING = {
   hook: 2.5,
   message: 1.8,
   cookingStep: 1.0, // × 3 steps
-  reveal: 2.0,
+  reply: 2.0, // single "Send this" reply screen
   hypeClip: -1, // use clip's natural duration
 } as const;
 
@@ -129,8 +130,7 @@ export async function assembleVideo(
       // If this man message has show_godtext_ui, render the cooking sequence
       // BEFORE showing his message land in the chat.
       if (msg.sender === "man" && msg.show_godtext_ui) {
-        // Cooking steps (3 loading frames — no reveal screen, video
-        // cuts straight back to the phone conversation after cooking)
+        // Cooking steps (3 loading frames)
         for (let step = 0; step < 3; step++) {
           const cookPath = path.join(
             jobDir,
@@ -145,6 +145,21 @@ export async function assembleVideo(
           segments.push({ kind: "image", path: cookPath, duration: TIMING.cookingStep });
           frameIdx++;
         }
+
+        // Reply screen — shows the single generated message with
+        // "Send this" label and "Send it" button, then cuts back to
+        // the phone conversation with the message already sent.
+        const replyPath = path.join(
+          jobDir,
+          `frame-${String(frameIdx).padStart(4, "0")}-reply.png`,
+        );
+        await screenshotFrame(page, baseUrl, replyPath, {
+          type: "reply",
+          reply: msg.text,
+          theme,
+        });
+        segments.push({ kind: "image", path: replyPath, duration: TIMING.reply });
+        frameIdx++;
       }
 
       // Add message to visible stack and render the phone screen
