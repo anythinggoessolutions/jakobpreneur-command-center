@@ -265,12 +265,98 @@ async function warmUpRenderPage(baseUrl: string): Promise<void> {
   throw new Error("Render page failed to compile after 10 attempts. Is 'npm run dev' running?");
 }
 
+// ---------------------------------------------------------------------------
+// Airtable vault fetchers
+// ---------------------------------------------------------------------------
+
+type HypeClip = { url: string; clipType: string };
+
+async function fetchHypeClips(): Promise<HypeClip[]> {
+  const url = new URL(
+    `${AIRTABLE_API}/${AIRTABLE_BASE_ID}/${encodeURIComponent("GodText Hype Clips")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records || [])
+    .filter((r: { fields: Record<string, unknown> }) => r.fields["Video URL"])
+    .map((r: { fields: Record<string, unknown> }) => ({
+      url: r.fields["Video URL"] as string,
+      clipType: (r.fields["Clip Type"] as string) || "Hype Clip",
+    }));
+}
+
+async function fetchRandomMusicUrl(): Promise<string | null> {
+  const url = new URL(
+    `${AIRTABLE_API}/${AIRTABLE_BASE_ID}/${encodeURIComponent("GodText Music")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const urls = (data.records || [])
+    .map((r: { fields: Record<string, unknown> }) => r.fields["Audio URL"] as string)
+    .filter((u: unknown): u is string => typeof u === "string" && (u as string).length > 0);
+  if (urls.length === 0) return null;
+  return urls[Math.floor(Math.random() * urls.length)];
+}
+
+function pickHypeClip(
+  clips: HypeClip[],
+  escalation: string,
+): HypeClip | null {
+  const preferred =
+    escalation === "maximum"
+      ? clips.filter((c) => c.clipType === "Hype Clip")
+      : clips.filter((c) => c.clipType === "Meme");
+  const pool = preferred.length > 0 ? preferred : clips;
+  if (pool.length === 0) return null;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+async function downloadFile(url: string, dest: string): Promise<void> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Download failed: ${resp.status} ${url}`);
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  await fs.writeFile(dest, buffer);
+}
+
+// ---------------------------------------------------------------------------
+// Video builder
+// ---------------------------------------------------------------------------
+
 async function buildVideo(
   conversation: Conversation,
   theme: string,
   jobDir: string,
 ): Promise<string> {
   const baseUrl = "http://localhost:3000";
+
+  // Fetch hype clips and music from the vaults
+  console.log("   Fetching hype clips and music from vaults...");
+  const [hypeClips, musicUrl] = await Promise.all([
+    fetchHypeClips(),
+    fetchRandomMusicUrl(),
+  ]);
+  console.log(`   Found ${hypeClips.length} hype clips, music: ${musicUrl ? "yes" : "none"}`);
+
+  // Download music if available
+  let musicPath: string | null = null;
+  if (musicUrl) {
+    musicPath = path.join(jobDir, "music.mp3");
+    try {
+      await downloadFile(musicUrl, musicPath);
+      console.log("   Music downloaded ✓");
+    } catch (err) {
+      console.log(`   Music download failed: ${err instanceof Error ? err.message : String(err)}`);
+      musicPath = null;
+    }
+  }
 
   // Make sure the render page is compiled before launching Playwright
   await warmUpRenderPage(baseUrl);
@@ -330,6 +416,26 @@ async function buildVideo(
     });
     segments.push({ kind: "image", path: phonePath, duration: TIMING.message });
     frameIdx++;
+
+    // Splice a hype clip after high/maximum escalation woman messages
+    if (
+      msg.sender === "woman" &&
+      (msg.escalation_level === "high" || msg.escalation_level === "maximum") &&
+      hypeClips.length > 0
+    ) {
+      try {
+        const clip = pickHypeClip(hypeClips, msg.escalation_level);
+        if (clip) {
+          const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
+          await downloadFile(clip.url, clipPath);
+          segments.push({ kind: "video", path: clipPath });
+          frameIdx++;
+          console.log(`   Spliced hype clip (${clip.clipType}) after "${msg.text.slice(0, 30)}..."`);
+        }
+      } catch (err) {
+        console.log(`   Hype clip download failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   await page.close();
@@ -340,13 +446,14 @@ async function buildVideo(
     jobDir,
     `godtext-${conversation.platform.toLowerCase()}-${Date.now()}.mp4`,
   );
-  await ffmpegAssemble(segments, outputPath, jobDir);
+  await ffmpegAssemble(segments, musicPath, outputPath, jobDir);
 
   return outputPath;
 }
 
 async function ffmpegAssemble(
   segments: Segment[],
+  musicPath: string | null,
   outputPath: string,
   jobDir: string,
 ): Promise<void> {
@@ -382,19 +489,54 @@ async function ffmpegAssemble(
     segIdx++;
   }
 
-  // Concat
+  // Concat all segments
   const concatList = path.join(jobDir, "concat.txt");
   await fs.writeFile(
     concatList,
     segmentVideos.map((p) => `file '${p}'`).join("\n"),
   );
 
+  const rawConcat = path.join(jobDir, "raw-concat.mp4");
   await exec("ffmpeg", [
     "-y", "-f", "concat", "-safe", "0", "-i", concatList,
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-ar", "44100",
     "-preset", "fast", "-crf", "18",
-    outputPath,
+    rawConcat,
   ]);
+
+  if (musicPath) {
+    // Mix music at 15% volume with 1s fade-in and 2s fade-out
+    const probeResult = await exec("ffprobe", [
+      "-v", "error",
+      "-show_entries", "format=duration",
+      "-of", "default=noprint_wrappers=1:nokey=1",
+      rawConcat,
+    ]);
+    const videoDur = parseFloat(probeResult.stdout.trim()) || 30;
+    const fadeOutStart = Math.max(0, videoDur - 2);
+
+    console.log(`   Mixing music at 15% volume (${videoDur.toFixed(1)}s video)`);
+
+    await exec("ffmpeg", [
+      "-y",
+      "-i", rawConcat,
+      "-stream_loop", "-1",
+      "-i", musicPath,
+      "-t", String(videoDur),
+      "-filter_complex",
+      `[1:a]atrim=0:${videoDur},volume=0.15,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music]`,
+      "-map", "0:v",
+      "-map", "[music]",
+      "-c:v", "copy",
+      "-c:a", "aac",
+      "-ar", "44100",
+      outputPath,
+    ], { timeout: 120000 });
+  } else {
+    // No music — just rename the concat
+    await fs.rename(rawConcat, outputPath);
+  }
 }
 
 function pad(n: number): string {
