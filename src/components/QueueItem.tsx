@@ -28,7 +28,7 @@ export default function QueueItem({ item, position }: QueueItemProps) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-zinc-900 text-sm font-semibold truncate">{tool.name}</span>
-          <span className="text-zinc-300 text-xs">Pt. {tool.partNumber}</span>
+          {tool.partNumber > 0 && <span className="text-zinc-300 text-xs">Pt. {tool.partNumber}</span>}
         </div>
         <div className="text-zinc-400 text-xs truncate">{tool.category} &middot; {tool.source}</div>
       </div>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listRecords, createRecord } from "@/lib/airtable";
+import { createRecord } from "@/lib/airtable";
 import { generateScriptBundle } from "@/lib/script-generator";
 import {
   HOOK_TYPE_LABEL,
@@ -66,17 +66,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "name and url required" }, { status: 400 });
     }
 
-    // Compute next part number (max existing + 1)
-    const existing = await listRecords<ToolFields>("Tools");
-    const partNumber =
-      existing.reduce((m, r) => Math.max(m, r.fields["Part Number"] || 0), 0) + 1;
-
     const aspirationEnabled = (process.env.AI_CAROUSEL_ENABLED || "").toLowerCase() === "true";
 
     const bundle = await generateScriptBundle({
       toolName: name,
       toolUrl: url,
-      partNumber,
+      partNumber: 0,
       hookType,
       reason,
       aspirationEnabled,
@@ -90,10 +85,10 @@ export async function POST(req: NextRequest) {
       Source: reason || "Manual submission",
       Category: bundle.category,
       Status: "queued",
-      "Part Number": partNumber,
+      "Part Number": 0,
       "Hook Type": HOOK_TYPE_LABEL[bundle.hookType],
       "Content Type": CONTENT_TYPE_LABEL[bundle.contentType],
-      "Relevance Score": 99, // manual adds are user-prioritized
+      "Relevance Score": 99,
       Description: bundle.description,
     });
 
@@ -127,7 +122,7 @@ export async function POST(req: NextRequest) {
         category: bundle.category,
         description: bundle.description,
         status: "queued",
-        partNumber,
+        partNumber: 0,
         hookType: bundle.hookType,
         relevanceScore: 99,
       },

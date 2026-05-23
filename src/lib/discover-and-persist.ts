@@ -77,16 +77,10 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
   try {
     const existingTools = await listRecords<ToolFields>("Tools");
     const excludeNames = existingTools.map((r) => r.fields.Name || "").filter(Boolean);
-    // Only Hook B tools consume series part numbers. Hook A / Hook C tools
-    // are standalone and get Part Number = 0.
-    const maxHookBPart = existingTools
-      .filter((r) => (r.fields["Hook Type"] || "").startsWith("B"))
-      .reduce((m, r) => Math.max(m, r.fields["Part Number"] || 0), 0);
 
     const { tools } = await discoverNewTools({ count, excludeNames });
     out.discovered = tools.length;
 
-    let nextHookBPart = maxHookBPart + 1;
     const today = ranAt.split("T")[0];
 
     for (const tool of tools) {
@@ -104,28 +98,17 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
           continue;
         }
 
-        // Pre-reserve a Hook B part number based on the suggested type
-        // (script-generator honors the requested hookType).
-        const willBeHookB = tool.suggestedHookType === "B";
-        const partNumber = willBeHookB ? nextHookBPart++ : 0;
-
         const bundle = await generateScriptBundle({
           toolName: tool.name,
           toolUrl: tool.url,
-          partNumber,
+          partNumber: 0,
           hookType: tool.suggestedHookType,
           contentType: tool.contentType,
           reason: tool.reasonInteresting,
           aspirationEnabled: aspirationEnabled(),
         });
 
-        // Safety net: if Claude returned a different hook type than
-        // requested, the pre-reserved part number is wrong. Roll it back.
-        const actualIsHookB = bundle.hookType === "B";
-        const finalPartNumber = actualIsHookB ? partNumber : 0;
-        if (willBeHookB && !actualIsHookB) {
-          nextHookBPart--; // give the slot back
-        }
+        const finalPartNumber = 0;
 
         const toolRec = await createRecord<ToolFields>("Tools", {
           Name: tool.name,
@@ -201,19 +184,6 @@ export async function discoverAndPersist(count: number): Promise<DiscoverPersist
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     out.fatal = msg;
-  }
-
-  // Always compact at the end of a discovery run. Discovery reserves part
-  // numbers optimistically but new tools may have higher relevance scores
-  // than existing queued ones; compact re-sequences everything by queue
-  // display order so Part N always matches record-order.
-  if (out.persisted > 0) {
-    try {
-      const { compactQueuedPartNumbers } = await import("./part-numbers");
-      await compactQueuedPartNumbers();
-    } catch (err) {
-      console.error("post-discovery compact failed:", err);
-    }
   }
 
   return out;

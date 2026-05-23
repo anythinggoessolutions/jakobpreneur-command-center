@@ -4,6 +4,7 @@ import { QueuedTool } from "@/lib/types";
 
 interface ScriptCardProps {
   item: QueuedTool;
+  nextSeriesPart: number;
   onComplete: () => void;
   onReject: () => void;
 }
@@ -38,9 +39,10 @@ function ScriptSection({ section, content }: { section: string; content: string 
   );
 }
 
-export default function ScriptCard({ item, onComplete, onReject }: ScriptCardProps) {
+export default function ScriptCard({ item, nextSeriesPart, onComplete, onReject }: ScriptCardProps) {
   const { tool, script, carousel } = item;
   const hookInfo = hookTypeLabels[script.hookType];
+  const displayPart = tool.partNumber > 0 ? tool.partNumber : (script.hookType === "B" ? nextSeriesPart : 0);
 
   return (
     <div className="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
@@ -52,7 +54,7 @@ export default function ScriptCard({ item, onComplete, onReject }: ScriptCardPro
               <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${hookInfo.color}`}>
                 {hookInfo.label}
               </span>
-              <span className="text-xs text-zinc-400">Part #{tool.partNumber}</span>
+              {displayPart > 0 && <span className="text-xs text-zinc-400">Part #{displayPart}</span>}
               <span className="text-xs text-zinc-400">&middot; ~{script.estimatedSeconds}s</span>
             </div>
             <h2 className="text-2xl font-bold text-zinc-900">{tool.name}</h2>
@@ -75,7 +77,14 @@ export default function ScriptCard({ item, onComplete, onReject }: ScriptCardPro
       <div className="px-6 py-5 border-b border-zinc-100">
         <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-4">Script</h3>
         <div className="space-y-4 bg-zinc-50 rounded-lg p-5 border border-zinc-100">
-          <ScriptSection section="hook" content={script.hook} />
+          <ScriptSection section="hook" content={
+            script.hookType === "B" && displayPart > 0 && !/Part\s+\d+/i.test(script.hook)
+              ? script.hook.replace(
+                  /(You Should Know)\./i,
+                  `$1. Part ${displayPart}.`,
+                )
+              : script.hook
+          } />
           <ScriptSection section="bridge" content={script.bridge} />
           <ScriptSection section="benefit" content={script.benefit} />
           <ScriptSection section="demo" content={script.demo} />

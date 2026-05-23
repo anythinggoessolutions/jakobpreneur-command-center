@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateRecord } from "@/lib/airtable";
-import { compactQueuedPartNumbers } from "@/lib/part-numbers";
+import { assignNextPartNumber } from "@/lib/part-numbers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,6 +18,8 @@ const VALID_STATUSES = new Set(["queued", "recorded", "rejected", "published"]);
  * Body: { status: "recorded" | "rejected" | "published" | "queued", rejectionReason?: string }
  *
  * Updates the Tool record's status (and optionally rejection reason / recorded date).
+ * When status is "recorded" and the tool is Hook B, assigns the next sequential
+ * part number at that moment — so the series order matches filming order.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
@@ -47,21 +49,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
     const updated = await updateRecord<ToolFields>("Tools", id, fields);
 
-    // After any status change that removes a tool from the queue (reject
-    // or record), repack the remaining queued part numbers so the series
-    // stays sequential. Without this, after you record Part 1 the next
-    // queued tool could still show Part 3, skipping a number.
-    let compactSummary = null;
-    if (status === "rejected" || status === "recorded") {
+    let partAssignment = null;
+    if (status === "recorded") {
       try {
-        compactSummary = await compactQueuedPartNumbers();
+        partAssignment = await assignNextPartNumber(id);
       } catch (err) {
-        // Non-fatal — status update already succeeded
-        console.error("compactQueuedPartNumbers failed:", err);
+        console.error("assignNextPartNumber failed:", err);
       }
     }
 
-    return NextResponse.json({ id: updated.id, status, compact: compactSummary });
+    return NextResponse.json({ id: updated.id, status, partAssignment });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg }, { status: 500 });

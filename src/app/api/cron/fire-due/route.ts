@@ -9,6 +9,7 @@ import {
   publishVideoToTikTok,
   publishCarouselToTikTok,
 } from "@/lib/video-publishers";
+import { getValidTikTokToken, queryTikTokCreatorInfo } from "@/lib/tiktok-oauth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -160,6 +161,16 @@ export async function GET(req: NextRequest) {
           toolName?: string;
           carouselType?: "famous_person" | "tool_breakdown" | "aspiration";
           toolUrl?: string;
+          tiktokCaption?: string;
+          tiktokOptions?: {
+            privacyLevel: string;
+            disableComment: boolean;
+            disableDuet: boolean;
+            disableStitch: boolean;
+            disclose: boolean;
+            brandedContent: boolean;
+            yourBrand: boolean;
+          } | null;
           aspiration?: import("@/lib/types").AspirationSlides;
         };
         if (!spec.headline || !Array.isArray(spec.slides) || spec.slides.length === 0) {
@@ -266,14 +277,30 @@ export async function GET(req: NextRequest) {
 
         // TikTok carousel — best effort. Failure here doesn't block the IG
         // post that already succeeded. Slide URLs are still alive at this
-        // point; cleanup happens after both platforms attempt.
+        // point; cleanup happens after both platforms attempt. Re-validates
+        // creator_info against the spec's selected privacy level per the
+        // Content Sharing Guidelines (the creator's allowed levels can
+        // shift between scheduling and posting).
         let tiktokResult: Awaited<ReturnType<typeof publishCarouselToTikTok>> | null = null;
         let tiktokError: string | null = null;
         try {
+          if (!spec.tiktokOptions?.privacyLevel) {
+            throw new Error(
+              "spec missing tiktokOptions — record was scheduled before TikTok compliance UI shipped; reschedule from the Drop Zone",
+            );
+          }
+          const accessToken = await getValidTikTokToken();
+          const live = await queryTikTokCreatorInfo(accessToken);
+          if (!live.privacyLevelOptions.includes(spec.tiktokOptions.privacyLevel)) {
+            throw new Error(
+              `creator's allowed privacy levels changed since scheduling (now: ${live.privacyLevelOptions.join(", ") || "none"}); reschedule from the Drop Zone`,
+            );
+          }
           tiktokResult = await publishCarouselToTikTok(
             slideUrls,
             spec.headline || "",
-            caption,
+            spec.tiktokCaption || caption,
+            spec.tiktokOptions,
           );
         } catch (ttErr: unknown) {
           tiktokError = ttErr instanceof Error ? ttErr.message : String(ttErr);
@@ -347,6 +374,15 @@ export async function GET(req: NextRequest) {
           ytTitle?: string;
           ytDescription?: string;
           tiktokCaption?: string;
+          tiktokOptions?: {
+            privacyLevel: string;
+            disableComment: boolean;
+            disableDuet: boolean;
+            disableStitch: boolean;
+            disclose: boolean;
+            brandedContent: boolean;
+            yourBrand: boolean;
+          } | null;
           platforms?: string[];
           pendingPlatforms?: string[];
           attemptCount?: number;
@@ -402,15 +438,32 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // TikTok
+        // TikTok — re-validate creator_info before posting per Content
+        // Sharing Guidelines. The creator's allowed privacy levels can
+        // shift between scheduling and posting; if the creator-selected
+        // privacy is no longer allowed, we mark this attempt failed and
+        // fall through to the retry/partial path so the user can re-pick.
         if (pending.includes("TikTok")) {
           try {
+            if (!spec.tiktokOptions?.privacyLevel) {
+              throw new Error(
+                "spec missing tiktokOptions — record was scheduled before TikTok compliance UI shipped; reschedule from the Drop Zone",
+              );
+            }
+            const accessToken = await getValidTikTokToken();
+            const live = await queryTikTokCreatorInfo(accessToken);
+            if (!live.privacyLevelOptions.includes(spec.tiktokOptions.privacyLevel)) {
+              throw new Error(
+                `creator's allowed privacy levels changed since scheduling (now: ${live.privacyLevelOptions.join(", ") || "none"}); reschedule from the Drop Zone`,
+              );
+            }
             const tt = await publishVideoToTikTok(
               spec.blobUrl,
               spec.tiktokCaption ||
                 rec.fields["IG Caption"] ||
                 rec.fields["Tool Name"] ||
                 "",
+              spec.tiktokOptions,
             );
             postResults.tiktok = { success: true, ...tt };
             if (!postedUrl && tt.url) {
@@ -424,6 +477,8 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        const succeeded = allPlatforms.filter((p) => !stillPending.includes(p));
+
         if (stillPending.length === 0) {
           // Everything succeeded — delete blob, mark posted.
           try { await del(spec.blobUrl); } catch {}
@@ -436,17 +491,42 @@ export async function GET(req: NextRequest) {
           summary.videos.fired++;
           summary.videos.results.push({ id: rec.id, results: postResults });
         } else if (attemptCount >= MAX_VIDEO_ATTEMPTS) {
-          // Too many retries — keep blob for manual inspection, mark failed.
-          const newSpec = { ...spec, pendingPlatforms: stillPending, attemptCount };
-          await updateRecord<VideoFields>("Videos", rec.id, {
-            Status: "failed",
-            "File Path": JSON.stringify(newSpec),
-            Error:
-              `${stillPending.join(",")} failed after ${attemptCount} attempts: ` +
-              JSON.stringify(postResults).slice(0, 400),
-          });
-          summary.videos.failed++;
-          summary.videos.results.push({ id: rec.id, error: "max attempts reached", results: postResults });
+          // Out of retries. If at least one platform posted successfully,
+          // honor that — don't roll back YT/IG/TikTok wins by labeling the
+          // whole record `failed` over a remaining platform's failure.
+          // Mark `posted` and surface the failed platform(s) in the Error
+          // field for visibility. If nothing succeeded, then mark failed.
+          if (succeeded.length > 0) {
+            try { await del(spec.blobUrl); } catch {}
+            await updateRecord<VideoFields>("Videos", rec.id, {
+              Status: "posted",
+              "Posted ID": postedId,
+              "Posted URL": postedUrl,
+              "Posted At": now.toISOString(),
+              Error:
+                `posted to ${succeeded.join(",")}; ${stillPending.join(",")} failed after ${attemptCount} attempts: ` +
+                JSON.stringify(postResults).slice(0, 300),
+            });
+            summary.videos.fired++;
+            summary.videos.results.push({
+              id: rec.id,
+              partialFinal: true,
+              posted: succeeded,
+              failed: stillPending,
+              results: postResults,
+            });
+          } else {
+            const newSpec = { ...spec, pendingPlatforms: stillPending, attemptCount };
+            await updateRecord<VideoFields>("Videos", rec.id, {
+              Status: "failed",
+              "File Path": JSON.stringify(newSpec),
+              Error:
+                `${stillPending.join(",")} failed after ${attemptCount} attempts: ` +
+                JSON.stringify(postResults).slice(0, 400),
+            });
+            summary.videos.failed++;
+            summary.videos.results.push({ id: rec.id, error: "max attempts reached", results: postResults });
+          }
         } else {
           // Some succeeded — retry remaining on next cron tick.
           const newSpec = { ...spec, pendingPlatforms: stillPending, attemptCount };

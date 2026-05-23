@@ -215,7 +215,36 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
 
   const [publishing, setPublishing] = useState(false);
   const [publishResults, setPublishResults] = useState<Record<string, { success: boolean; url?: string; error?: string; scheduled?: boolean; scheduledDate?: string; scheduledTime?: string; scheduledDatetime?: string; platforms?: string[] }> | null>(null);
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram", "tiktok"]));
+  // TikTok is intentionally OFF by default while the Content Posting API
+  // audit is pending (submitted 2026-05-08, 2-4 week SLA). Unaudited apps
+  // get 403 unaudited_client_can_only_post_to_private_accounts on every
+  // public DIRECT_POST attempt, so leaving TikTok on would burn 3 retry
+  // slots per video and cause noise. Re-enable in the default set once the
+  // audit lands.
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Set<string>>(new Set(["youtube", "x", "instagram"]));
+
+  // TikTok Content Sharing Guidelines: privacy / interaction / commercial
+  // disclosure values must come from creator_info, not be hardcoded.
+  type TikTokCreatorInfo = {
+    creatorAvatarUrl: string;
+    creatorUsername: string;
+    creatorNickname: string;
+    privacyLevelOptions: string[];
+    commentDisabled: boolean;
+    duetDisabled: boolean;
+    stitchDisabled: boolean;
+    maxVideoPostDurationSec: number;
+  };
+  const [tiktokInfo, setTiktokInfo] = useState<TikTokCreatorInfo | null>(null);
+  const [tiktokInfoLoading, setTiktokInfoLoading] = useState(false);
+  const [tiktokInfoError, setTiktokInfoError] = useState<string | null>(null);
+  const [tiktokPrivacy, setTiktokPrivacy] = useState<string>("");
+  const [tiktokDisableComment, setTiktokDisableComment] = useState(false);
+  const [tiktokDisableDuet, setTiktokDisableDuet] = useState(false);
+  const [tiktokDisableStitch, setTiktokDisableStitch] = useState(false);
+  const [tiktokDisclose, setTiktokDisclose] = useState(false);
+  const [tiktokBrandedContent, setTiktokBrandedContent] = useState(false);
+  const [tiktokYourBrand, setTiktokYourBrand] = useState(false);
 
   const togglePlatform = (p: string) => {
     setSelectedPlatforms((prev) => {
@@ -225,6 +254,48 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
       return next;
     });
   };
+
+  // Fetch creator_info the first time TikTok becomes selected. Cached for
+  // the rest of the session; the cron will re-query at post time so any
+  // shift in allowed values between scheduling and posting is caught
+  // server-side.
+  useEffect(() => {
+    if (!selectedPlatforms.has("tiktok")) return;
+    if (tiktokInfo || tiktokInfoLoading) return;
+    setTiktokInfoLoading(true);
+    setTiktokInfoError(null);
+    fetch("/api/auth/tiktok/creator-info")
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+        return data as TikTokCreatorInfo;
+      })
+      .then((info) => {
+        setTiktokInfo(info);
+        setTiktokPrivacy(info.privacyLevelOptions[0] || "");
+        setTiktokDisableComment(info.commentDisabled);
+        setTiktokDisableDuet(info.duetDisabled);
+        setTiktokDisableStitch(info.stitchDisabled);
+      })
+      .catch((err) => setTiktokInfoError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setTiktokInfoLoading(false));
+  }, [selectedPlatforms, tiktokInfo, tiktokInfoLoading]);
+
+  // Branded content can't post as SELF_ONLY per TikTok policy. If user
+  // toggles brand content while privacy is private, lift them to public.
+  useEffect(() => {
+    if (tiktokDisclose && tiktokBrandedContent && tiktokPrivacy === "SELF_ONLY") {
+      const fallback = tiktokInfo?.privacyLevelOptions.find((p) => p !== "SELF_ONLY");
+      if (fallback) setTiktokPrivacy(fallback);
+    }
+  }, [tiktokDisclose, tiktokBrandedContent, tiktokPrivacy, tiktokInfo]);
+
+  const tiktokCompliancePending =
+    selectedPlatforms.has("tiktok") &&
+    (tiktokInfoLoading ||
+      !tiktokInfo ||
+      !tiktokPrivacy ||
+      (tiktokDisclose && !tiktokBrandedContent && !tiktokYourBrand));
 
   const handlePublish = async () => {
     if (!currentJob?.id || !publishPayload) return;
@@ -239,6 +310,15 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
       formData.append("tiktok_caption", publishPayload.tiktokCaption);
       formData.append("tweets", JSON.stringify(publishPayload.tweets));
       formData.append("platforms", Array.from(selectedPlatforms).join(","));
+      if (selectedPlatforms.has("tiktok")) {
+        formData.append("tiktok_privacy_level", tiktokPrivacy);
+        formData.append("tiktok_disable_comment", tiktokDisableComment ? "1" : "0");
+        formData.append("tiktok_disable_duet", tiktokDisableDuet ? "1" : "0");
+        formData.append("tiktok_disable_stitch", tiktokDisableStitch ? "1" : "0");
+        formData.append("tiktok_disclose", tiktokDisclose ? "1" : "0");
+        formData.append("tiktok_branded_content", tiktokBrandedContent ? "1" : "0");
+        formData.append("tiktok_your_brand", tiktokYourBrand ? "1" : "0");
+      }
       if (publishPayload.carouselSpec) {
         formData.append("carousel_spec", JSON.stringify(publishPayload.carouselSpec));
       }
@@ -418,6 +498,198 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
                   </button>
                 ))}
               </div>
+
+              {selectedPlatforms.has("tiktok") && (
+                <div className="mb-3 rounded-lg border border-pink-200 bg-pink-50/50 p-3">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-pink-700">
+                      Post to TikTok
+                    </span>
+                    {tiktokInfoLoading && (
+                      <span className="text-[11px] text-zinc-500">loading creator settings…</span>
+                    )}
+                  </div>
+
+                  {tiktokInfoError ? (
+                    <div className="text-xs text-red-600">
+                      Couldn&apos;t load TikTok options: {tiktokInfoError}. Reconnect TikTok or
+                      uncheck the platform to continue.
+                    </div>
+                  ) : tiktokInfo ? (
+                    <div className="space-y-3">
+                      {/* Creator identity */}
+                      <div className="flex items-center gap-2">
+                        {tiktokInfo.creatorAvatarUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={tiktokInfo.creatorAvatarUrl}
+                            alt=""
+                            className="w-7 h-7 rounded-full border border-zinc-200"
+                          />
+                        )}
+                        <div className="text-xs text-zinc-700">
+                          <div className="font-semibold">{tiktokInfo.creatorNickname}</div>
+                          <div className="text-zinc-500">@{tiktokInfo.creatorUsername}</div>
+                        </div>
+                      </div>
+
+                      {/* Caption preview — exactly what posts to TikTok */}
+                      <div>
+                        <div className="text-[11px] font-semibold text-zinc-600 mb-1">
+                          Caption preview
+                        </div>
+                        <div className="rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800 whitespace-pre-wrap break-words min-h-[2.5rem]">
+                          {publishPayload?.tiktokCaption || (
+                            <span className="text-zinc-400">No caption set</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Privacy selector — populated from creator_info */}
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-600 mb-1 block">
+                          Who can view this video
+                        </label>
+                        <select
+                          value={tiktokPrivacy}
+                          onChange={(e) => setTiktokPrivacy(e.target.value)}
+                          className="w-full rounded border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-800"
+                        >
+                          {tiktokInfo.privacyLevelOptions.map((p) => {
+                            const disabled =
+                              tiktokDisclose && tiktokBrandedContent && p === "SELF_ONLY";
+                            const label =
+                              p === "PUBLIC_TO_EVERYONE"
+                                ? "Public"
+                                : p === "MUTUAL_FOLLOW_FRIENDS"
+                                  ? "Friends"
+                                  : p === "FOLLOWER_OF_CREATOR"
+                                    ? "Followers"
+                                    : p === "SELF_ONLY"
+                                      ? "Only me"
+                                      : p;
+                            return (
+                              <option key={p} value={p} disabled={disabled}>
+                                {label}
+                                {disabled ? " — not allowed for branded content" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Interaction toggles */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          {
+                            label: "Comment",
+                            disabled: tiktokInfo.commentDisabled,
+                            value: tiktokDisableComment,
+                            set: setTiktokDisableComment,
+                          },
+                          {
+                            label: "Duet",
+                            disabled: tiktokInfo.duetDisabled,
+                            value: tiktokDisableDuet,
+                            set: setTiktokDisableDuet,
+                          },
+                          {
+                            label: "Stitch",
+                            disabled: tiktokInfo.stitchDisabled,
+                            value: tiktokDisableStitch,
+                            set: setTiktokDisableStitch,
+                          },
+                        ].map((t) => (
+                          <label
+                            key={t.label}
+                            className={`flex items-center gap-1.5 text-[11px] ${t.disabled ? "opacity-50" : ""}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={t.disabled || t.value}
+                              disabled={t.disabled}
+                              onChange={(e) => t.set(e.target.checked)}
+                              className="cursor-pointer"
+                            />
+                            <span className="text-zinc-700">Disable {t.label}</span>
+                          </label>
+                        ))}
+                      </div>
+
+                      {/* Disclose post content */}
+                      <div className="border-t border-pink-200 pt-3">
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={tiktokDisclose}
+                            onChange={(e) => {
+                              setTiktokDisclose(e.target.checked);
+                              if (!e.target.checked) {
+                                setTiktokBrandedContent(false);
+                                setTiktokYourBrand(false);
+                              }
+                            }}
+                            className="mt-0.5 cursor-pointer"
+                          />
+                          <div className="text-[11px] text-zinc-700">
+                            <div className="font-semibold">Disclose post content</div>
+                            <div className="text-zinc-500">
+                              Turn on to disclose that this video promotes goods or services in
+                              exchange for something of value. Your video could promote yourself,
+                              a third party, or both.
+                            </div>
+                          </div>
+                        </label>
+
+                        {tiktokDisclose && (
+                          <div className="mt-2 ml-5 space-y-2">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={tiktokYourBrand}
+                                onChange={(e) => setTiktokYourBrand(e.target.checked)}
+                                className="mt-0.5 cursor-pointer"
+                              />
+                              <div className="text-[11px] text-zinc-700">
+                                <div className="font-semibold">Your brand</div>
+                                <div className="text-zinc-500">
+                                  You are promoting yourself or your own business. This video will
+                                  be classified as Brand Organic.
+                                </div>
+                              </div>
+                            </label>
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={tiktokBrandedContent}
+                                onChange={(e) => setTiktokBrandedContent(e.target.checked)}
+                                className="mt-0.5 cursor-pointer"
+                              />
+                              <div className="text-[11px] text-zinc-700">
+                                <div className="font-semibold">Branded content</div>
+                                <div className="text-zinc-500">
+                                  You are promoting another brand or a third party. This video
+                                  will be classified as Branded Content.
+                                </div>
+                              </div>
+                            </label>
+                            {!tiktokBrandedContent && !tiktokYourBrand && (
+                              <div className="text-[11px] text-amber-700">
+                                Pick at least one to disclose, or turn off the disclosure toggle.
+                              </div>
+                            )}
+                            <div className="text-[10px] text-zinc-500 leading-snug">
+                              {tiktokBrandedContent
+                                ? "By posting, you agree to TikTok's Branded Content Policy and Music Usage Confirmation."
+                                : "By posting, you agree to TikTok's Music Usage Confirmation."}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
             </>
           ) : null}
 
@@ -428,7 +700,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
             {publishPayload && !publishResults && (
               <button
                 onClick={handlePublish}
-                disabled={publishing || selectedPlatforms.size === 0}
+                disabled={publishing || selectedPlatforms.size === 0 || tiktokCompliancePending}
                 className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-sm font-semibold rounded-lg cursor-pointer"
               >
                 {publishing ? "Scheduling…" : "Schedule"}
@@ -440,7 +712,7 @@ export default function VideoDropZone({ seriesText, publishPayload }: VideoDropZ
             {publishPayload && publishResults && Object.values(publishResults).some((r) => !r.success) && (
               <button
                 onClick={() => { setPublishResults(null); handlePublish(); }}
-                disabled={publishing || selectedPlatforms.size === 0}
+                disabled={publishing || selectedPlatforms.size === 0 || tiktokCompliancePending}
                 className="flex-1 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-zinc-200 disabled:text-zinc-400 text-white text-sm font-semibold rounded-lg cursor-pointer"
               >
                 {publishing ? "Retrying…" : "Retry Schedule"}

@@ -162,7 +162,14 @@ export async function GET() {
     });
     const queue = entries.map((e) => e.item);
 
-    return NextResponse.json({ queue });
+    // Compute the next series part number so the UI can show what number
+    // unassigned Hook B tools will get when recorded.
+    const maxAssignedPart = toolRecords
+      .filter((r) => (r.fields["Hook Type"] || "").startsWith("B"))
+      .filter((r) => (r.fields["Part Number"] || 0) > 0)
+      .reduce((m, r) => Math.max(m, r.fields["Part Number"] || 0), 0);
+
+    return NextResponse.json({ queue, nextSeriesPart: maxAssignedPart + 1 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: msg, queue: [] }, { status: 500 });

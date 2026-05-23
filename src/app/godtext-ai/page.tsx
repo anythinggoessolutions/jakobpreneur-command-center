@@ -1,0 +1,465 @@
+"use client";
+
+import { useState } from "react";
+import GodTextVaultGrid from "@/components/GodTextVaultGrid";
+import GodTextPhoneMockup, {
+  type PhonePlatform,
+  type ChatMessage,
+} from "@/components/GodTextPhoneMockup";
+import GodTextGeneratingScreen from "@/components/GodTextGeneratingScreen";
+import GodTextCookingWhite from "@/components/GodTextCookingWhite";
+import GodTextCookingDark from "@/components/GodTextCookingDark";
+
+type GeneratedConversation = {
+  scenario: string;
+  platform: PhonePlatform;
+  hookText: string;
+  messages: {
+    sender: "man" | "woman";
+    text: string;
+    show_godtext_ui?: boolean;
+    escalation_level?: "low" | "medium" | "high" | "maximum";
+  }[];
+};
+
+export default function GodTextAIPage() {
+  const [conversations, setConversations] = useState<GeneratedConversation[]>([]);
+  const [activeConvIdx, setActiveConvIdx] = useState(0);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [referenceCount, setReferenceCount] = useState<number | null>(null);
+  const [previewFrame, setPreviewFrame] = useState<number>(0);
+  const [genCount, setGenCount] = useState(1);
+  const [genProgress, setGenProgress] = useState<string | null>(null);
+  const [assembling, setAssembling] = useState(false);
+  const [assembleError, setAssembleError] = useState<string | null>(null);
+  const [videoResult, setVideoResult] = useState<{
+    outputPath: string;
+    durationSeconds: number;
+    frameCount: number;
+    warnings: string[];
+  } | null>(null);
+  const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
+  const [cookingPreview, setCookingPreview] = useState<"off" | "white-cooking" | "white-reveal" | "dark-cooking" | "dark-reveal">("off");
+
+  const conversation = conversations[activeConvIdx] ?? null;
+
+  const runGenerate = async () => {
+    setGenerating(true);
+    setGenError(null);
+    setGenProgress(genCount > 1 ? `Generating ${genCount} scripts…` : null);
+    try {
+      const res = await fetch("/api/godtext/scripts/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count: genCount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const convs = (data.results || [])
+        .filter((r: { success: boolean }) => r.success)
+        .map((r: { conversation: GeneratedConversation }) => r.conversation);
+      if (convs.length === 0) {
+        throw new Error(
+          data.results?.[0]?.error || "All generations failed"
+        );
+      }
+      setConversations(convs);
+      setActiveConvIdx(0);
+      setReferenceCount(data.referenceVaultSize ?? null);
+      setPreviewFrame(0);
+      if (data.failed > 0) {
+        setGenError(`${data.succeeded} succeeded, ${data.failed} failed`);
+      }
+    } catch (err) {
+      setGenError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGenerating(false);
+      setGenProgress(null);
+    }
+  };
+
+  const runAssemble = async () => {
+    if (!conversation) return;
+    setAssembling(true);
+    setAssembleError(null);
+    setVideoResult(null);
+    try {
+      const res = await fetch("/api/godtext/videos/assemble", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversation, theme: videoTheme }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setVideoResult(data);
+    } catch (err) {
+      setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAssembling(false);
+    }
+  };
+
+  // Walk the conversation as a sequence of preview frames so Jakob can
+  // scrub through what each video beat will look like:
+  //   - frame 0:        empty conversation (just the chat header)
+  //   - frame i (odd):  generating screen using the next man message
+  //   - frame i (even): conversation with messages[0..i/2] visible
+  // Simplified: even frames show the chat, odd frames show generating.
+  const buildFrames = (conv: GeneratedConversation) => {
+    const frames: Array<
+      | { kind: "phone"; messages: ChatMessage[] }
+      | { kind: "gen"; womanMessage: string; aiResponse: string; revealed: boolean }
+    > = [];
+
+    const visible: ChatMessage[] = [];
+    for (let i = 0; i < conv.messages.length; i++) {
+      const m = conv.messages[i];
+      if (m.sender === "man" && m.show_godtext_ui) {
+        // Find the previous woman message — that's what the user
+        // "screenshotted" before asking GodText for a reply.
+        const prevWoman = [...conv.messages.slice(0, i)]
+          .reverse()
+          .find((x) => x.sender === "woman");
+        frames.push({
+          kind: "gen",
+          womanMessage: prevWoman?.text || "(opener)",
+          aiResponse: m.text,
+          revealed: false,
+        });
+        frames.push({
+          kind: "gen",
+          womanMessage: prevWoman?.text || "(opener)",
+          aiResponse: m.text,
+          revealed: true,
+        });
+      }
+      visible.push({ sender: m.sender, text: m.text });
+      frames.push({ kind: "phone", messages: [...visible] });
+    }
+    return frames;
+  };
+
+  const frames = conversation ? buildFrames(conversation) : [];
+  const currentFrame = frames[previewFrame];
+
+  return (
+    <div className="min-h-screen bg-zinc-50">
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold text-zinc-900">GodText AI — Content Lab</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Generate viral short-form videos for the GodText AI app. All content
+            here is GodText AI branded — fully separate from JakobPreneur.
+          </p>
+        </header>
+
+        {/* --- Section 1: Rizz Vault --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="rizz"
+            title="Rizz Vault"
+            description="Screenshots of viral text-rizz conversations. Claude studies these as style reference when generating new scripts."
+          />
+        </section>
+
+        {/* --- Section 1.5: UI References --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="ui-refs"
+            title="Platform UI References"
+            description="Real chat UI screenshots — Hinge, Instagram DMs, Tinder, iMessage. Design reference for the phone-mockup component. Upload once, used forever."
+          />
+        </section>
+
+        {/* --- Section 2: Hype Clip Vault --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="hype-clips"
+            title="Hype Clip Vault"
+            description="Short viral / meme video clips inserted between conversation beats. Random selection per video."
+          />
+        </section>
+
+        {/* --- Section 2.5: Music Vault --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="music"
+            title="Music Vault"
+            description="Background music. One track plays as a base layer through the full video; hype-clip audio layers on top."
+          />
+        </section>
+
+        {/* --- Section 3: Video Generator --- */}
+        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900">Video Generator</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Generate scripts using the Rizz Vault as visual reference,
+                then preview every video beat using Components A and B before
+                stitching the final MP4 (next phase).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={genCount}
+                onChange={(e) => setGenCount(Number(e.target.value))}
+                disabled={generating}
+                className="rounded border border-zinc-200 bg-white text-xs px-2 py-2 disabled:opacity-40"
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? "script" : "scripts"}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={runGenerate}
+                disabled={generating}
+                className="bg-zinc-900 text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:bg-zinc-300 cursor-pointer whitespace-nowrap"
+              >
+                {generating ? "Generating…" : "Generate"}
+              </button>
+            </div>
+          </div>
+
+          {genProgress && (
+            <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+              {genProgress}
+            </div>
+          )}
+
+          {genError && (
+            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+              {genError}
+            </div>
+          )}
+
+          {referenceCount !== null && referenceCount === 0 && (
+            <div className="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              No rizz-vault screenshots yet — upload a few above for sharper
+              output. Claude still generates without them, but quality jumps
+              significantly with 3-6 reference images.
+            </div>
+          )}
+
+          {conversations.length > 1 && (
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {conversations.map((c, i) => (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setActiveConvIdx(i);
+                    setPreviewFrame(0);
+                  }}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                    i === activeConvIdx
+                      ? "bg-zinc-900 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}
+                >
+                  Script {i + 1}
+                  <span className="ml-1 opacity-60">({c.platform})</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {conversation && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: metadata + JSON */}
+              <div>
+                <div className="text-xs text-zinc-500 mb-2">
+                  <span className="font-semibold text-zinc-700">Scenario:</span>{" "}
+                  {conversation.scenario}
+                </div>
+                <div className="text-xs text-zinc-500 mb-2">
+                  <span className="font-semibold text-zinc-700">Platform:</span>{" "}
+                  {conversation.platform}
+                </div>
+                <div className="text-xs text-zinc-500 mb-3">
+                  <span className="font-semibold text-zinc-700">Hook:</span>{" "}
+                  &ldquo;{conversation.hookText}&rdquo;
+                </div>
+
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+                  Frame {previewFrame + 1} of {frames.length}
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <button
+                    onClick={() => setPreviewFrame((i) => Math.max(0, i - 1))}
+                    disabled={previewFrame === 0}
+                    className="px-3 py-1 rounded border border-zinc-300 text-xs disabled:opacity-40"
+                  >
+                    ← Prev
+                  </button>
+                  <button
+                    onClick={() =>
+                      setPreviewFrame((i) => Math.min(frames.length - 1, i + 1))
+                    }
+                    disabled={previewFrame >= frames.length - 1}
+                    className="px-3 py-1 rounded border border-zinc-300 text-xs disabled:opacity-40"
+                  >
+                    Next →
+                  </button>
+                </div>
+
+                <details className="text-xs text-zinc-500">
+                  <summary className="cursor-pointer font-semibold text-zinc-700">
+                    Raw conversation JSON
+                  </summary>
+                  <pre className="mt-2 bg-zinc-100 rounded p-2 overflow-auto text-[11px] leading-snug max-h-96">
+                    {JSON.stringify(conversation, null, 2)}
+                  </pre>
+                </details>
+              </div>
+
+              {/* Right: live preview */}
+              <div className="flex justify-center items-start">
+                {currentFrame?.kind === "phone" ? (
+                  <GodTextPhoneMockup
+                    platform={conversation.platform}
+                    messages={currentFrame.messages}
+                    scale={0.8}
+                  />
+                ) : currentFrame?.kind === "gen" ? (
+                  videoTheme === "white" ? (
+                    <GodTextCookingWhite
+                      phase={currentFrame.revealed ? "reveal" : "cooking"}
+                      scale={0.8}
+                    />
+                  ) : (
+                    <GodTextCookingDark
+                      phase={currentFrame.revealed ? "reveal" : "cooking"}
+                      scale={0.8}
+                    />
+                  )
+                ) : null}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* --- Section 3.5: Cooking Screen Preview --- */}
+        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900">Cooking Screen Preview</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Preview the GodText AI cooking / reveal screens that play
+                during video beats. These are the actual app UI components.
+              </p>
+            </div>
+            <select
+              value={cookingPreview}
+              onChange={(e) => setCookingPreview(e.target.value as typeof cookingPreview)}
+              className="rounded border border-zinc-200 bg-white text-xs px-2 py-2"
+            >
+              <option value="off">Select preview…</option>
+              <option value="dark-cooking">Dark — Cooking</option>
+              <option value="dark-reveal">Dark — Reveal</option>
+              <option value="white-cooking">White — Cooking</option>
+              <option value="white-reveal">White — Reveal</option>
+            </select>
+          </div>
+          {cookingPreview !== "off" && (
+            <div className="flex justify-center py-4 bg-zinc-100 rounded-lg">
+              {cookingPreview.startsWith("white") ? (
+                <GodTextCookingWhite
+                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
+                  scale={0.55}
+                />
+              ) : (
+                <GodTextCookingDark
+                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
+                  scale={0.55}
+                />
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* --- Section 3.75: Build Video --- */}
+        {conversation && (
+          <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <h2 className="text-sm font-bold text-zinc-900">Build Video</h2>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Assemble a 1080x1920 MP4 from the selected script. Uses
+                  Playwright for screenshots + FFmpeg for stitching. Runs
+                  locally only.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={videoTheme}
+                  onChange={(e) => setVideoTheme(e.target.value as "dark" | "white")}
+                  disabled={assembling}
+                  className="rounded border border-zinc-200 bg-white text-xs px-2 py-2 disabled:opacity-40"
+                >
+                  <option value="dark">Dark Theme</option>
+                  <option value="white">White Theme</option>
+                </select>
+                <button
+                  onClick={runAssemble}
+                  disabled={assembling}
+                  className="bg-gradient-to-r from-orange-600 to-red-600 text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                >
+                  {assembling ? "Building…" : "Build Video"}
+                </button>
+              </div>
+            </div>
+
+            {assembling && (
+              <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+                Assembling video — this takes 1–3 minutes (screenshotting
+                frames, encoding, mixing audio). Don&apos;t close this tab.
+              </div>
+            )}
+
+            {assembleError && (
+              <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                {assembleError}
+              </div>
+            )}
+
+            {videoResult && (
+              <div className="text-xs bg-green-50 border border-green-200 rounded px-3 py-3">
+                <div className="font-semibold text-green-800 mb-1">
+                  Video ready!
+                </div>
+                <div className="text-green-700 space-y-0.5">
+                  <div>Duration: {videoResult.durationSeconds}s</div>
+                  <div>Frames: {videoResult.frameCount}</div>
+                  {videoResult.warnings.length > 0 && (
+                    <div className="text-amber-700 mt-1">
+                      Warnings: {videoResult.warnings.join("; ")}
+                    </div>
+                  )}
+                </div>
+                <a
+                  href={`/api/godtext/videos/download?path=${encodeURIComponent(videoResult.outputPath)}`}
+                  download
+                  className="inline-block mt-2 bg-green-700 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
+                >
+                  Download MP4
+                </a>
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* --- Section 4: Content Calendar (placeholder) --- */}
+        <section className="mb-6 rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-center">
+          <h2 className="text-sm font-bold text-zinc-900 mb-1">Content Calendar</h2>
+          <p className="text-xs text-zinc-500">
+            Scheduled + posted videos and per-platform metrics. Wired up next
+            phase (after FFmpeg assembly + posting).
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}

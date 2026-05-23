@@ -31,10 +31,23 @@ type VideoFields = {
  *   toolName, partNumber?, blobUrl,
  *   ytTitle, ytDescription,
  *   igCaption,
- *   platforms: ("YouTube" | "Instagram")[],
+ *   tiktokCaption,
+ *   tiktokOptions?: { privacyLevel, disableComment, disableDuet, disableStitch,
+ *                     disclose, brandedContent, yourBrand },
+ *   platforms: ("YouTube" | "Instagram" | "TikTok")[],
  *   sourceJobId?
  * }
  */
+type TikTokOptions = {
+  privacyLevel: string;
+  disableComment: boolean;
+  disableDuet: boolean;
+  disableStitch: boolean;
+  disclose: boolean;
+  brandedContent: boolean;
+  yourBrand: boolean;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -45,6 +58,8 @@ export async function POST(req: NextRequest) {
       ytTitle,
       ytDescription,
       igCaption,
+      tiktokCaption,
+      tiktokOptions,
       platforms,
       sourceJobId,
     } = body as {
@@ -54,9 +69,18 @@ export async function POST(req: NextRequest) {
       ytTitle?: string;
       ytDescription?: string;
       igCaption?: string;
+      tiktokCaption?: string;
+      tiktokOptions?: TikTokOptions;
       platforms?: string[];
       sourceJobId?: string;
     };
+
+    if (platforms?.includes("TikTok") && !tiktokOptions?.privacyLevel) {
+      return NextResponse.json(
+        { error: "tiktokOptions.privacyLevel is required when TikTok is in platforms" },
+        { status: 400 },
+      );
+    }
 
     if (!toolName || !blobUrl || !platforms || platforms.length === 0) {
       return NextResponse.json(
@@ -79,6 +103,8 @@ export async function POST(req: NextRequest) {
       blobUrl,
       ytTitle: ytTitle || toolName,
       ytDescription: ytDescription || "",
+      tiktokCaption: tiktokCaption || "",
+      tiktokOptions: tiktokOptions || null,
       platforms,
       pendingPlatforms: [...platforms],
       attemptCount: 0,

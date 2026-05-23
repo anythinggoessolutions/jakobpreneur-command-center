@@ -1,20 +1,14 @@
 /**
- * Compact part numbers so they're sequential right after the highest
- * recorded/published part number — no gaps. Called whenever the queue
- * changes shape (e.g. on reject), so the next-up video always shows the
- * correct series number.
+ * Part number assignment — numbers are assigned at RECORDING TIME only.
  *
- * IMPORTANT: only Hook B tools get part numbers. Hook A (Curiosity) and
- * Hook C (Bold Claim) videos are standalone and don't speak a "Part N" out
- * loud, so they shouldn't consume series numbers. Hook A/C tools have
- * Part Number set to 0 to make the distinction explicit in Airtable.
+ * Queued Hook B tools have Part Number = 0 (unassigned). When the user
+ * marks a tool as "recorded", assignNextPartNumber() gives it the next
+ * sequential number after the highest existing recorded/published part.
  *
- * Recorded/published Hook B part numbers are sacred (they were the actual
- * part number used in a published video) and are never touched. Only
- * queued Hook B tools get renumbered.
+ * This means the series order matches the order the user actually films,
+ * not the order tools appeared in the queue.
  *
- * Hook B scripts contain "Part N" text in their hook + full script, so when
- * we renumber a Hook B tool, we also rewrite the script text to match.
+ * Hook A/C/D/E/F tools never get part numbers (always 0).
  */
 
 import { listRecords, updateRecord } from "./airtable";
@@ -24,123 +18,97 @@ type ToolFields = {
   Status?: string;
   "Part Number"?: number;
   "Hook Type"?: string;
-  "Relevance Score"?: number;
 };
 
 type ScriptFields = {
   "Tool Name"?: string;
   Hook?: string;
   "Full Script"?: string;
-  "Hook Type"?: string;
   Tweets?: string;
 };
-
-const SACRED_STATUSES = new Set(["recorded", "published"]);
-
-export interface CompactResult {
-  renumbered: number;
-  skipped: number;
-  scriptsUpdated: number;
-}
 
 function isHookB(t: { fields: ToolFields }): boolean {
   return (t.fields["Hook Type"] || "").startsWith("B");
 }
 
-export async function compactQueuedPartNumbers(): Promise<CompactResult> {
+export interface AssignResult {
+  toolId: string;
+  assignedPart: number;
+  scriptUpdated: boolean;
+}
+
+/**
+ * Assigns the next sequential part number to a specific Hook B tool.
+ * Called when status transitions to "recorded". Returns the assigned number.
+ */
+export async function assignNextPartNumber(toolId: string): Promise<AssignResult> {
   const [tools, scripts] = await Promise.all([
     listRecords<ToolFields>("Tools"),
     listRecords<ScriptFields>("Scripts"),
   ]);
 
-  // Only Hook B tools that are recorded/published count toward the series max.
-  const sacredMax = tools
-    .filter((r) => SACRED_STATUSES.has(r.fields.Status || ""))
+  const target = tools.find((r) => r.id === toolId);
+  if (!target) throw new Error(`Tool ${toolId} not found`);
+  if (!isHookB(target)) {
+    return { toolId, assignedPart: 0, scriptUpdated: false };
+  }
+
+  const maxPart = tools
     .filter(isHookB)
+    .filter((r) => (r.fields["Part Number"] || 0) > 0)
     .reduce((m, r) => Math.max(m, r.fields["Part Number"] || 0), 0);
 
-  // Index scripts by lowercased Tool Name for in-place hook rewriting
-  const scriptsByName = new Map<string, { id: string; fields: ScriptFields }>();
-  for (const s of scripts) {
-    const n = (s.fields["Tool Name"] || "").trim().toLowerCase();
-    if (n) scriptsByName.set(n, { id: s.id, fields: s.fields });
-  }
+  const nextPart = maxPart + 1;
 
-  let renumbered = 0;
-  let skipped = 0;
-  let scriptsUpdated = 0;
+  await updateRecord<ToolFields>("Tools", toolId, { "Part Number": nextPart });
 
-  // 1) Renumber queued Hook B tools in the same order the UI displays the
-  //    queue (relevance score DESC, then existing part ASC as a tiebreaker).
-  //    This way Part N matches the order the user will actually record —
-  //    the first tool they pick up gets the next sequential Part.
-  const queuedHookB = tools
-    .filter((r) => r.fields.Status === "queued")
-    .filter(isHookB)
-    .sort((a, b) => {
-      const scoreDiff = (b.fields["Relevance Score"] || 0) - (a.fields["Relevance Score"] || 0);
-      if (scoreDiff !== 0) return scoreDiff;
-      return (a.fields["Part Number"] || 0) - (b.fields["Part Number"] || 0);
-    });
+  let scriptUpdated = false;
+  const toolName = (target.fields.Name || "").trim().toLowerCase();
+  const script = scripts.find(
+    (s) => (s.fields["Tool Name"] || "").trim().toLowerCase() === toolName,
+  );
 
-  let nextPart = sacredMax + 1;
-  for (const t of queuedHookB) {
-    const oldPart = t.fields["Part Number"] || 0;
-    if (oldPart === nextPart) {
-      skipped++;
-      nextPart++;
-      continue;
+  if (script) {
+    const fields: Partial<ScriptFields> = {};
+    if (script.fields.Hook) {
+      fields.Hook = injectPartNumber(script.fields.Hook, nextPart);
     }
-
-    await updateRecord<ToolFields>("Tools", t.id, { "Part Number": nextPart });
-    renumbered++;
-
-    // The part number is embedded in the script text for Hook B tools —
-    // rewrite Hook + Full Script + the JSON-encoded Tweets field so all
-    // surfaces stay consistent (the repurposed_hook tweet quotes the part).
-    const name = (t.fields.Name || "").trim().toLowerCase();
-    const script = scriptsByName.get(name);
-    if (script) {
-      const fields: Partial<ScriptFields> = {};
-      if (script.fields.Hook) {
-        fields.Hook = rewritePartNumber(script.fields.Hook, oldPart, nextPart);
-      }
-      if (script.fields["Full Script"]) {
-        fields["Full Script"] = rewritePartNumber(
-          script.fields["Full Script"],
-          oldPart,
-          nextPart,
-        );
-      }
-      if (script.fields.Tweets) {
-        fields.Tweets = rewritePartNumber(script.fields.Tweets, oldPart, nextPart);
-      }
-      if (Object.keys(fields).length > 0) {
-        await updateRecord<ScriptFields>("Scripts", script.id, fields);
-        scriptsUpdated++;
-      }
+    if (script.fields["Full Script"]) {
+      fields["Full Script"] = injectPartNumber(script.fields["Full Script"], nextPart);
     }
-    nextPart++;
+    if (script.fields.Tweets) {
+      fields.Tweets = injectPartNumber(script.fields.Tweets, nextPart);
+    }
+    if (Object.keys(fields).length > 0) {
+      await updateRecord<ScriptFields>("Scripts", script.id, fields);
+      scriptUpdated = true;
+    }
   }
 
-  // 2) Wipe Part Number on queued Hook A / Hook C tools — they don't
-  //    consume series slots and shouldn't show a confusing number.
-  const queuedNonHookB = tools
-    .filter((r) => r.fields.Status === "queued")
-    .filter((r) => !isHookB(r));
-  for (const t of queuedNonHookB) {
-    if ((t.fields["Part Number"] || 0) === 0) continue;
-    await updateRecord<ToolFields>("Tools", t.id, { "Part Number": 0 });
-    renumbered++;
-  }
-
-  return { renumbered, skipped, scriptsUpdated };
+  return { toolId, assignedPart: nextPart, scriptUpdated };
 }
 
-function rewritePartNumber(text: string, oldPart: number, newPart: number): string {
-  // Match "Part N" / "part N" where N is the exact old part number, surrounded
-  // by word boundaries. Case-insensitive so tweets with lowercase "part 3" get
-  // rewritten too. Capture the original casing to preserve it.
-  const re = new RegExp(`\\b(P)(art)\\s+${oldPart}\\b`, "gi");
-  return text.replace(re, (_m, p, art) => `${p}${art} ${newPart}`);
+/**
+ * Injects or replaces "Part N" in script text.
+ * Handles both cases:
+ *  - Text already has "Part [TBD]" or "Part \d+" → replace with correct number
+ *  - Text has "You Should Know." without Part → append " Part N."
+ */
+function injectPartNumber(text: string, part: number): string {
+  const hasPart = /\bPart\s+(\d+|\[TBD\])/i.test(text);
+  if (hasPart) {
+    return text.replace(/\b(Part)\s+(\d+|\[TBD\])/gi, `$1 ${part}`);
+  }
+  return text.replace(
+    /(Powerful AI Tools You Should Know)\./gi,
+    `$1. Part ${part}.`,
+  );
+}
+
+/**
+ * Legacy compat — called after reject/record status changes.
+ * Now a no-op since queued tools no longer have part numbers.
+ */
+export async function compactQueuedPartNumbers(): Promise<{ renumbered: number; skipped: number; scriptsUpdated: number }> {
+  return { renumbered: 0, skipped: 0, scriptsUpdated: 0 };
 }

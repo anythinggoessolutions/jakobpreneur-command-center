@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { listRecords } from "@/lib/airtable";
 import { publishCarouselToTikTok } from "@/lib/video-publishers";
+import { getValidTikTokToken, queryTikTokCreatorInfo } from "@/lib/tiktok-oauth";
 
 export const dynamic = "force-dynamic";
 // Bumped — IG container poll + TikTok carousel publish + status poll can
@@ -14,16 +15,43 @@ type ConnectionFields = {
   Status?: string;
 };
 
+type TikTokOptions = {
+  privacyLevel: string;
+  disableComment: boolean;
+  disableDuet: boolean;
+  disableStitch: boolean;
+  disclose: boolean;
+  brandedContent: boolean;
+  yourBrand: boolean;
+};
+
 /**
  * POST /api/carousel/publish
  * Publishes a pre-rendered carousel (slideUrls) to Instagram as a carousel post.
  *
- * Body JSON: { slideUrls: string[], caption: string, cleanupBlobs?: boolean }
+ * Body JSON: { slideUrls: string[], caption: string, cleanupBlobs?: boolean,
+ *   tiktokCaption?, tiktokOptions?: TikTokOptions }
+ *
+ * If tiktokOptions is omitted, TikTok cross-posting is skipped (IG-only).
+ * When provided, TikTok publish runs after IG with the supplied compliance
+ * settings.
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { slideUrls, caption, cleanupBlobs = true } = body;
+    const {
+      slideUrls,
+      caption,
+      cleanupBlobs = true,
+      tiktokCaption,
+      tiktokOptions,
+    } = body as {
+      slideUrls?: string[];
+      caption?: string;
+      cleanupBlobs?: boolean;
+      tiktokCaption?: string;
+      tiktokOptions?: TikTokOptions;
+    };
 
     if (!Array.isArray(slideUrls) || slideUrls.length < 2 || slideUrls.length > 10) {
       return NextResponse.json(
@@ -110,17 +138,37 @@ export async function POST(req: NextRequest) {
     }
 
     // Step 4: TikTok carousel (best effort — IG already succeeded).
+    // Only attempted when caller supplied tiktokOptions (compliance values
+    // gathered from creator_info in the UI). Re-validates the spec privacy
+    // level against live creator_info per the Content Sharing Guidelines.
     let tiktok: { success: true; publishId: string; postId?: string; url?: string }
       | { success: false; error: string }
+      | { skipped: true }
       | null = null;
-    try {
-      const tt = await publishCarouselToTikTok(slideUrls, caption || "", "");
-      tiktok = { success: true, ...tt };
-    } catch (ttErr: unknown) {
-      tiktok = {
-        success: false,
-        error: ttErr instanceof Error ? ttErr.message : String(ttErr),
-      };
+    if (tiktokOptions?.privacyLevel) {
+      try {
+        const ttAccessToken = await getValidTikTokToken();
+        const live = await queryTikTokCreatorInfo(ttAccessToken);
+        if (!live.privacyLevelOptions.includes(tiktokOptions.privacyLevel)) {
+          throw new Error(
+            `creator's allowed privacy levels changed (now: ${live.privacyLevelOptions.join(", ") || "none"})`,
+          );
+        }
+        const tt = await publishCarouselToTikTok(
+          slideUrls!,
+          caption || "",
+          tiktokCaption || caption || "",
+          tiktokOptions,
+        );
+        tiktok = { success: true, ...tt };
+      } catch (ttErr: unknown) {
+        tiktok = {
+          success: false,
+          error: ttErr instanceof Error ? ttErr.message : String(ttErr),
+        };
+      }
+    } else {
+      tiktok = { skipped: true };
     }
 
     // Step 5: Clean up blobs (after both platforms have pulled)

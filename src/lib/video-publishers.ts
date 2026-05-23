@@ -207,9 +207,31 @@ async function pollTikTokPublishStatus(
   throw new Error("TikTok publish status timed out after 2min");
 }
 
+/**
+ * Compliance options the creator picks in the in-app post-to-TikTok review
+ * screen. All fields are required at publish time per the Content Sharing
+ * Guidelines — no field falls back to a hardcoded default. The cron
+ * re-validates `privacyLevel` against creator_info before posting in case
+ * the creator's allowed levels shift between scheduling and posting.
+ */
+export type TikTokPostOptions = {
+  privacyLevel: string;
+  disableComment: boolean;
+  disableDuet: boolean;
+  disableStitch: boolean;
+  // Commercial-content disclosure: TikTok requires both the umbrella
+  // `disclose` flag and at least one of brandedContent / yourBrand to be
+  // true when disclose is true. When disclose is false, both sub-flags
+  // must be false.
+  disclose: boolean;
+  brandedContent: boolean;
+  yourBrand: boolean;
+};
+
 export async function publishVideoToTikTok(
   blobUrl: string,
   title: string,
+  options: TikTokPostOptions,
 ): Promise<{ publishId: string; postId?: string; url?: string }> {
   const accessToken = await getValidTikTokToken();
 
@@ -222,11 +244,17 @@ export async function publishVideoToTikTok(
     body: JSON.stringify({
       post_info: {
         title: title.slice(0, 2200),
-        privacy_level: "PUBLIC_TO_EVERYONE",
-        disable_duet: false,
-        disable_comment: false,
-        disable_stitch: false,
+        privacy_level: options.privacyLevel,
+        disable_duet: options.disableDuet,
+        disable_comment: options.disableComment,
+        disable_stitch: options.disableStitch,
         video_cover_timestamp_ms: 1000,
+        ...(options.disclose
+          ? {
+              brand_content_toggle: options.brandedContent,
+              brand_organic_toggle: options.yourBrand,
+            }
+          : {}),
       },
       source_info: {
         source: "PULL_FROM_URL",
@@ -270,7 +298,8 @@ export async function publishVideoToTikTok(
 export async function publishCarouselToTikTok(
   slideUrls: string[],
   title: string,
-  description: string = "",
+  description: string,
+  options: TikTokPostOptions,
 ): Promise<{ publishId: string; postId?: string; url?: string }> {
   if (slideUrls.length < 1 || slideUrls.length > 35) {
     throw new Error(
@@ -289,9 +318,15 @@ export async function publishCarouselToTikTok(
       post_info: {
         title: title.slice(0, 90),
         description: description.slice(0, 2200),
-        privacy_level: "PUBLIC_TO_EVERYONE",
-        disable_comment: false,
+        privacy_level: options.privacyLevel,
+        disable_comment: options.disableComment,
         auto_add_music: true,
+        ...(options.disclose
+          ? {
+              brand_content_toggle: options.brandedContent,
+              brand_organic_toggle: options.yourBrand,
+            }
+          : {}),
       },
       source_info: {
         source: "PULL_FROM_URL",

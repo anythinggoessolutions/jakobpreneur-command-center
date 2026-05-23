@@ -161,6 +161,61 @@ export async function getValidTikTokToken(): Promise<string> {
   return refreshed.accessToken;
 }
 
+/**
+ * Query the creator's TikTok posting capabilities. Required by the Content
+ * Sharing Guidelines: the in-app post-to-TikTok UI must show only the
+ * privacy levels TikTok allows for this creator (e.g. some accounts can't
+ * post `PUBLIC_TO_EVERYONE`), and must reflect the creator's `comment` /
+ * `duet` / `stitch` capability flags. Values are time-sensitive and must
+ * be re-queried at post time, not just at scheduling time.
+ */
+export type TikTokCreatorInfo = {
+  creatorAvatarUrl: string;
+  creatorUsername: string;
+  creatorNickname: string;
+  privacyLevelOptions: string[];
+  commentDisabled: boolean;
+  duetDisabled: boolean;
+  stitchDisabled: boolean;
+  maxVideoPostDurationSec: number;
+};
+
+export async function queryTikTokCreatorInfo(
+  accessToken: string,
+): Promise<TikTokCreatorInfo> {
+  const res = await fetch(
+    "https://open.tiktokapis.com/v2/post/publish/creator_info/query/",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+    },
+  );
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`TikTok creator_info failed (${res.status}): ${err}`);
+  }
+  const data = await res.json();
+  if (data.error?.code && data.error.code !== "ok") {
+    throw new Error(
+      `TikTok creator_info error: ${data.error.code} - ${data.error.message}`,
+    );
+  }
+  const d = data.data || {};
+  return {
+    creatorAvatarUrl: (d.creator_avatar_url as string) || "",
+    creatorUsername: (d.creator_username as string) || "",
+    creatorNickname: (d.creator_nickname as string) || "",
+    privacyLevelOptions: (d.privacy_level_options as string[]) || [],
+    commentDisabled: Boolean(d.comment_disabled),
+    duetDisabled: Boolean(d.duet_disabled),
+    stitchDisabled: Boolean(d.stitch_disabled),
+    maxVideoPostDurationSec: Number(d.max_video_post_duration_sec) || 0,
+  };
+}
+
 export async function fetchTikTokUserInfo(accessToken: string) {
   const res = await fetch(
     "https://open.tiktokapis.com/v2/user/info/?fields=open_id,display_name,avatar_url",

@@ -25,10 +25,40 @@ type VideoFields = {
  *
  * Carousels go to Instagram + TikTok only per SKILL_2.
  */
+type TikTokOptions = {
+  privacyLevel: string;
+  disableComment: boolean;
+  disableDuet: boolean;
+  disableStitch: boolean;
+  disclose: boolean;
+  brandedContent: boolean;
+  yourBrand: boolean;
+};
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { toolName, headline, slides, carouselType, toolUrl, igCaption, aspiration } = body;
+    const {
+      toolName,
+      headline,
+      slides,
+      carouselType,
+      toolUrl,
+      igCaption,
+      tiktokCaption,
+      tiktokOptions,
+      aspiration,
+    } = body as {
+      toolName?: string;
+      headline?: string;
+      slides?: string[];
+      carouselType?: string;
+      toolUrl?: string;
+      igCaption?: string;
+      tiktokCaption?: string;
+      tiktokOptions?: TikTokOptions;
+      aspiration?: unknown;
+    };
 
     if (!toolName || !headline || !Array.isArray(slides)) {
       return NextResponse.json(
@@ -54,6 +84,8 @@ export async function POST(req: NextRequest) {
       carouselType: carouselType || "tool_breakdown",
       toolName,
       toolUrl,
+      tiktokCaption: tiktokCaption || "",
+      tiktokOptions: tiktokOptions || null,
       ...(aspiration ? { aspiration } : {}),
     });
 

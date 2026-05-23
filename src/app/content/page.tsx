@@ -13,6 +13,7 @@ import { QueuedTool } from "@/lib/types";
 
 export default function ContentPage() {
   const [queue, setQueue] = useState<QueuedTool[]>([]);
+  const [nextSeriesPart, setNextSeriesPart] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -28,6 +29,7 @@ export default function ContentPage() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     setQueue(data.queue || []);
+    if (data.nextSeriesPart) setNextSeriesPart(data.nextSeriesPart);
   };
 
   useEffect(() => {
@@ -171,26 +173,30 @@ export default function ContentPage() {
 
   const handleComplete = async () => {
     const tool = currentItem.tool;
-    // Mark Tool as recorded in Airtable (only if it's an Airtable record id, not a temp placeholder)
+    let assignedPart = tool.partNumber;
     if (!tool.id.startsWith("temp-")) {
       try {
-        await fetch(`/api/tools/${tool.id}/status`, {
+        const res = await fetch(`/api/tools/${tool.id}/status`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: "recorded" }),
         });
+        const data = await res.json();
+        if (data.partAssignment?.assignedPart) {
+          assignedPart = data.partAssignment.assignedPart;
+          setNextSeriesPart(assignedPart + 1);
+        }
       } catch (err) {
         console.error("Failed to mark recorded:", err);
       }
     }
-    // Reserve a video schedule slot
     try {
       const res = await fetch("/api/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           toolName: tool.name,
-          partNumber: tool.partNumber,
+          partNumber: assignedPart,
           themeTag: tool.category,
         }),
       });
@@ -347,6 +353,7 @@ export default function ContentPage() {
             </h2>
             <ScriptCard
               item={currentItem}
+              nextSeriesPart={nextSeriesPart}
               onComplete={handleComplete}
               onReject={handleReject}
             />
