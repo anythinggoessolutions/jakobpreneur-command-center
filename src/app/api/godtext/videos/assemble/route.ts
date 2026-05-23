@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createRequire } from "module";
+import path from "path";
 import { listRecords } from "@/lib/airtable";
 import { assembleVideo, type AssemblyInput } from "@/lib/godtext-video-assembler";
 
@@ -26,9 +27,13 @@ type MusicFields = { "Audio URL"?: string };
  */
 export async function POST(req: NextRequest) {
   try {
-    // Quick guard: fail fast if Playwright isn't available
+    // Quick guard: fail fast if Playwright isn't available.
+    // We use process.cwd() + a fake filename because import.meta.url
+    // can resolve to a Turbopack virtual path that can't find node_modules.
     try {
-      const nodeRequire = createRequire(import.meta.url);
+      const nodeRequire = createRequire(
+        path.join(process.cwd(), "__pw_check__.js"),
+      );
       nodeRequire(["play", "wright"].join(""));
     } catch {
       return NextResponse.json(

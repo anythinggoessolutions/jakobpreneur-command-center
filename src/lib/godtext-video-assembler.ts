@@ -262,7 +262,9 @@ export async function assembleVideo(
 const PW_MODULE = ["play", "wright"].join("");
 
 async function launchBrowser() {
-  const nodeRequire = createRequire(import.meta.url);
+  // Use process.cwd() instead of import.meta.url — Turbopack rewrites
+  // import.meta.url to a virtual path that can't resolve node_modules.
+  const nodeRequire = createRequire(path.join(process.cwd(), "__pw__.js"));
   const pw = nodeRequire(PW_MODULE) as {
     chromium: {
       launch: (opts: { headless: boolean }) => Promise<{

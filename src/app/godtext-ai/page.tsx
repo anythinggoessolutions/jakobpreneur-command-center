@@ -38,6 +38,7 @@ export default function GodTextAIPage() {
     durationSeconds: number;
     frameCount: number;
     warnings: string[];
+    videoUrl?: string;
   } | null>(null);
   const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
   const [cookingPreview, setCookingPreview] = useState<"off" | "white-cooking" | "white-reveal" | "dark-cooking" | "dark-reveal">("off");
@@ -116,17 +117,46 @@ export default function GodTextAIPage() {
     setAssembleError(null);
     setVideoResult(null);
     try {
-      const res = await fetch("/api/godtext/videos/assemble", {
+      // Queue the job in Airtable
+      const queueRes = await fetch("/api/godtext/videos/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation, theme: videoTheme }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setVideoResult(data);
+      const queueData = await queueRes.json();
+      if (!queueRes.ok) throw new Error(queueData.error || `HTTP ${queueRes.status}`);
+
+      const jobId = queueData.jobId;
+
+      // Poll for completion
+      const poll = async (): Promise<void> => {
+        const statusRes = await fetch(`/api/godtext/videos/status?jobId=${jobId}`);
+        const statusData = await statusRes.json();
+
+        if (statusData.status === "complete" && statusData.videoUrl) {
+          setVideoResult({
+            outputPath: "",
+            durationSeconds: 0,
+            frameCount: 0,
+            warnings: [],
+            videoUrl: statusData.videoUrl,
+          });
+          setAssembling(false);
+          return;
+        }
+
+        if (statusData.status === "failed") {
+          throw new Error(statusData.error || "Video assembly failed");
+        }
+
+        // Still queued or processing — wait and poll again
+        await new Promise((r) => setTimeout(r, 3000));
+        return poll();
+      };
+
+      await poll();
     } catch (err) {
       setAssembleError(err instanceof Error ? err.message : String(err));
-    } finally {
       setAssembling(false);
     }
   };
@@ -457,9 +487,8 @@ export default function GodTextAIPage() {
               <div>
                 <h2 className="text-sm font-bold text-zinc-900">Build Video</h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Assemble a 1080x1920 MP4 from the selected script. Uses
-                  Playwright for screenshots + FFmpeg for stitching. Runs
-                  locally only.
+                  Assemble a 1080x1920 MP4 from the selected script. Queues the
+                  job — your Mac builds it and uploads the finished video.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -484,8 +513,10 @@ export default function GodTextAIPage() {
 
             {assembling && (
               <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
-                Assembling video — this takes 1–3 minutes (screenshotting
-                frames, encoding, mixing audio). Don&apos;t close this tab.
+                Video queued — your Mac is building it now (screenshotting
+                frames, encoding, uploading). This page will update automatically
+                when it&apos;s ready. Make sure <code className="bg-blue-100 px-1 rounded">npm run godtext-worker</code> is
+                running in a terminal.
               </div>
             )}
 
@@ -498,21 +529,14 @@ export default function GodTextAIPage() {
             {videoResult && (
               <div className="text-xs bg-green-50 border border-green-200 rounded px-3 py-3">
                 <div className="font-semibold text-green-800 mb-1">
-                  Video ready!
-                </div>
-                <div className="text-green-700 space-y-0.5">
-                  <div>Duration: {videoResult.durationSeconds}s</div>
-                  <div>Frames: {videoResult.frameCount}</div>
-                  {videoResult.warnings.length > 0 && (
-                    <div className="text-amber-700 mt-1">
-                      Warnings: {videoResult.warnings.join("; ")}
-                    </div>
-                  )}
+                  Video ready! 🎬
                 </div>
                 <a
-                  href={`/api/godtext/videos/download?path=${encodeURIComponent(videoResult.outputPath)}`}
+                  href={videoResult.videoUrl || `/api/godtext/videos/download?path=${encodeURIComponent(videoResult.outputPath)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   download
-                  className="inline-block mt-2 bg-green-700 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
+                  className="inline-block mt-1 bg-green-700 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
                 >
                   Download MP4
                 </a>
