@@ -47,6 +47,20 @@ export default function GodTextAIPage() {
     { id: string; name: string; platform: string; hookText: string; conversation: GeneratedConversation | null; createdTime: string }[]
   >([]);
   const [loadingScripts, setLoadingScripts] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<{
+    postId: string;
+    status: string;
+    scheduledFor: string;
+  } | null>(null);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    // Default to tomorrow
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  });
+  const [scheduleSlot, setScheduleSlot] = useState("07:00");
 
   const conversation = conversations[activeConvIdx] ?? null;
 
@@ -159,6 +173,58 @@ export default function GodTextAIPage() {
     } catch (err) {
       setAssembleError(err instanceof Error ? err.message : String(err));
       setAssembling(false);
+    }
+  };
+
+  const SLOT_LABELS: Record<string, string> = {
+    "07:00": "7:00 AM — Early morning",
+    "11:30": "11:30 AM — Lunch break",
+    "14:30": "2:30 PM — Afternoon peak",
+    "18:00": "6:00 PM — Post-work",
+    "21:00": "9:00 PM — Night scroll",
+  };
+
+  const runSchedule = async () => {
+    if (!videoResult?.videoUrl) return;
+    setScheduling(true);
+    setScheduleError(null);
+    setScheduleResult(null);
+    try {
+      // Build the scheduled time in Eastern: date + slot time → ISO UTC
+      // The API route handles timezone conversion
+      const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
+      // Convert Eastern to UTC by using Intl to figure out offset
+      const eastern = new Date(scheduledFor);
+      const utcFormatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/New_York",
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      });
+      const parts = utcFormatter.formatToParts(eastern);
+      const g = (t: string) => parts.find((p) => p.type === t)?.value || "";
+      const easternISO = `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}:${g("second")}`;
+      const offset = new Date(easternISO + "Z").getTime() - new Date(new Date(easternISO + "Z").toLocaleString("en-US", { timeZone: "America/New_York" })).getTime();
+      const utcDate = new Date(new Date(scheduledFor + "Z").getTime() + offset);
+
+      const res = await fetch("/api/godtext/post-everywhere/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          videoUrl: videoResult.videoUrl,
+          scheduledFor: utcDate.toISOString(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setScheduleResult({
+        postId: data.postId,
+        status: data.status,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+      });
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScheduling(false);
     }
   };
 
@@ -534,31 +600,88 @@ export default function GodTextAIPage() {
 
             {videoResult && (
               <div className="text-xs bg-green-50 border border-green-200 rounded px-3 py-3">
-                <div className="font-semibold text-green-800 mb-1">
+                <div className="font-semibold text-green-800 mb-2">
                   Video ready! 🎬
                 </div>
-                <a
-                  href={videoResult.videoUrl || `/api/godtext/videos/download?path=${encodeURIComponent(videoResult.outputPath)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  download
-                  className="inline-block mt-1 bg-green-700 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
-                >
-                  Download MP4
-                </a>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={videoResult.videoUrl || `/api/godtext/videos/download?path=${encodeURIComponent(videoResult.outputPath)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="inline-block bg-green-700 text-white font-semibold px-4 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
+                  >
+                    Download MP4
+                  </a>
+
+                  {videoResult.videoUrl && (
+                    <>
+                      <span className="text-green-600 mx-1">|</span>
+                      <select
+                        value={scheduleDate}
+                        onChange={(e) => setScheduleDate(e.target.value)}
+                        disabled={scheduling}
+                        className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+                      >
+                        {Array.from({ length: 14 }, (_, i) => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + i + 1);
+                          const val = d.toISOString().split("T")[0];
+                          const label = d.toLocaleDateString("en-US", {
+                            weekday: "short",
+                            month: "short",
+                            day: "numeric",
+                          });
+                          return (
+                            <option key={val} value={val}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <select
+                        value={scheduleSlot}
+                        onChange={(e) => setScheduleSlot(e.target.value)}
+                        disabled={scheduling}
+                        className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+                      >
+                        <option value="07:00">7:00 AM — Early morning</option>
+                        <option value="11:30">11:30 AM — Lunch break</option>
+                        <option value="14:30">2:30 PM — Afternoon peak</option>
+                        <option value="18:00">6:00 PM — Post-work</option>
+                        <option value="21:00">9:00 PM — Night scroll</option>
+                      </select>
+                      <button
+                        onClick={runSchedule}
+                        disabled={scheduling}
+                        className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                      >
+                        {scheduling ? "Scheduling…" : "Schedule to Socials"}
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {scheduleError && (
+                  <div className="mt-2 text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                    {scheduleError}
+                  </div>
+                )}
+
+                {scheduleResult && (
+                  <div className="mt-2 text-purple-800 bg-purple-50 border border-purple-200 rounded px-2 py-1.5">
+                    Scheduled! Post ID: <code className="bg-purple-100 px-1 rounded">{scheduleResult.postId}</code>
+                    {" "}— {scheduleResult.scheduledFor} (ET) to TikTok, Instagram Reels, YouTube Shorts
+                  </div>
+                )}
               </div>
             )}
           </section>
         )}
 
-        {/* --- Section 4: Content Calendar (placeholder) --- */}
-        <section className="mb-6 rounded-xl border border-dashed border-zinc-300 bg-white p-6 text-center">
-          <h2 className="text-sm font-bold text-zinc-900 mb-1">Content Calendar</h2>
-          <p className="text-xs text-zinc-500">
-            Scheduled + posted videos and per-platform metrics. Wired up next
-            phase (after FFmpeg assembly + posting).
-          </p>
-        </section>
+        {/* --- Section 4: Content Calendar --- */}
+        <ScheduledPostsFeed />
       </div>
     </div>
   );
@@ -697,5 +820,129 @@ function ReplyPreview({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled Posts Feed — shows upcoming + published posts from PE
+// ---------------------------------------------------------------------------
+
+type PEPost = {
+  id: string;
+  content: string;
+  status: string;
+  scheduled_for?: string;
+  published_at?: string;
+  platform_content?: Record<string, unknown>;
+};
+
+function ScheduledPostsFeed() {
+  const [posts, setPosts] = useState<PEPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"scheduled" | "published">("scheduled");
+
+  const fetchPosts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/godtext/post-everywhere/posts?status=${tab}`, {
+        cache: "no-store",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data.posts || []);
+      }
+    } catch {
+      // non-fatal
+    } finally {
+      setLoading(false);
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [fetchPosts]);
+
+  return (
+    <section className="mb-6 rounded-xl border border-purple-200 bg-purple-50/40 p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">Content Calendar</h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Scheduled and published GodText AI videos across TikTok, Instagram, YouTube.
+          </p>
+        </div>
+        <div className="flex gap-1">
+          {(["scheduled", "published"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
+                tab === t
+                  ? "bg-purple-600 text-white"
+                  : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
+              }`}
+            >
+              {t === "scheduled" ? "Scheduled" : "Published"}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-xs text-zinc-400">Loading…</div>
+      ) : posts.length === 0 ? (
+        <div className="text-xs text-zinc-400">
+          {tab === "scheduled"
+            ? "No scheduled posts. Build a video and schedule it above!"
+            : "No published posts yet."}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {posts.map((post) => (
+            <div
+              key={post.id}
+              className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs"
+            >
+              <div className="shrink-0 w-14 text-center">
+                {post.scheduled_for || post.published_at ? (
+                  <div className="text-[10px] font-semibold text-purple-700">
+                    {new Date(
+                      post.scheduled_for || post.published_at || "",
+                    ).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                    <br />
+                    {new Date(
+                      post.scheduled_for || post.published_at || "",
+                    ).toLocaleTimeString("en-US", {
+                      hour: "numeric",
+                      minute: "2-digit",
+                      timeZone: "America/New_York",
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-zinc-400">—</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0 truncate text-zinc-700">
+                {post.content.split("\n")[0]}
+              </div>
+              <span
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                  post.status === "scheduled"
+                    ? "bg-blue-100 text-blue-700"
+                    : post.status === "published"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-zinc-100 text-zinc-600"
+                }`}
+              >
+                {post.status}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
