@@ -39,8 +39,19 @@ export async function GET(req: NextRequest) {
     }
 
     const data = await res.json();
-    // PE returns { data: [...] } or an array — normalize
-    const posts = Array.isArray(data) ? data : data.data || data.posts || [];
+    // PE returns { posts: [...], pagination: {...} } — extract the array.
+    // Guard against nested shapes: data itself, data.posts, data.data.
+    let posts: unknown[] = [];
+    if (Array.isArray(data)) {
+      posts = data;
+    } else if (Array.isArray(data.posts)) {
+      posts = data.posts;
+    } else if (Array.isArray(data.data)) {
+      posts = data.data;
+    } else if (data.posts && Array.isArray(data.posts.posts)) {
+      // Double-wrapped: { posts: { posts: [], pagination } }
+      posts = data.posts.posts;
+    }
 
     return NextResponse.json({ posts });
   } catch (err: unknown) {

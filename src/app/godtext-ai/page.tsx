@@ -849,7 +849,8 @@ function ScheduledPostsFeed() {
       });
       if (res.ok) {
         const data = await res.json();
-        setPosts(data.posts || []);
+        const list = Array.isArray(data.posts) ? data.posts : [];
+        setPosts(list);
       }
     } catch {
       // non-fatal
