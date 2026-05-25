@@ -132,46 +132,26 @@ export default function GodTextAIPage() {
     setAssembleError(null);
     setVideoResult(null);
     try {
-      // Queue the job in Airtable
-      const queueRes = await fetch("/api/godtext/videos/queue", {
+      // Build the video directly — no separate worker needed.
+      // The API route launches Playwright + ffmpeg inline.
+      const res = await fetch("/api/godtext/videos/build", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation, theme: videoTheme }),
       });
-      const queueData = await queueRes.json();
-      if (!queueRes.ok) throw new Error(queueData.error || `HTTP ${queueRes.status}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
 
-      const jobId = queueData.jobId;
-
-      // Poll for completion
-      const poll = async (): Promise<void> => {
-        const statusRes = await fetch(`/api/godtext/videos/status?jobId=${jobId}`);
-        const statusData = await statusRes.json();
-
-        if (statusData.status === "complete" && statusData.videoUrl) {
-          setVideoResult({
-            outputPath: "",
-            durationSeconds: 0,
-            frameCount: 0,
-            warnings: [],
-            videoUrl: statusData.videoUrl,
-          });
-          setAssembling(false);
-          return;
-        }
-
-        if (statusData.status === "failed") {
-          throw new Error(statusData.error || "Video assembly failed");
-        }
-
-        // Still queued or processing — wait and poll again
-        await new Promise((r) => setTimeout(r, 3000));
-        return poll();
-      };
-
-      await poll();
+      setVideoResult({
+        outputPath: "",
+        durationSeconds: 0,
+        frameCount: 0,
+        warnings: [],
+        videoUrl: data.videoUrl,
+      });
     } catch (err) {
       setAssembleError(err instanceof Error ? err.message : String(err));
+    } finally {
       setAssembling(false);
     }
   };
@@ -573,10 +553,8 @@ export default function GodTextAIPage() {
 
             {assembling && (
               <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
-                Video queued — your Mac is building it now (screenshotting
-                frames, encoding, uploading). This page will update automatically
-                when it&apos;s ready. Make sure <code className="bg-blue-100 px-1 rounded">npm run godtext-worker</code> is
-                running in a terminal.
+                Building video — screenshotting frames, encoding MP4, uploading.
+                This takes 1-2 minutes. Don&apos;t close this tab.
               </div>
             )}
 

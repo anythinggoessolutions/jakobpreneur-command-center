@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "godtext-worker": "node --experimental-strip-types scripts/godtext-video-worker.mts"
+    "godtext-worker": "node --experimental-strip-types scripts/godtext-video-worker.mts",
+    "godtext-studio": "npm run dev & sleep 5 && npm run godtext-worker"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
