@@ -134,18 +134,22 @@ export function generateCaption(): string {
 // ---------------------------------------------------------------------------
 
 type UploadInitResponse = {
-  media_id: string;
-  upload_url: string;
-  upload_method: string;
-  provider: string;
-  expires_in: number;
+  data: {
+    media_id: string;
+    upload_url: string;
+    upload_method: { method: string; headers?: Record<string, string> };
+    provider: string;
+    expires_in: number;
+  };
 };
 
 type UploadCompleteResponse = {
-  id: string;
-  status: string;
-  type: string;
-  thumbnail_url?: string;
+  data: {
+    id: string;
+    status: string;
+    type: string;
+    thumbnail_url?: string;
+  };
 };
 
 /**
@@ -189,10 +193,12 @@ export async function uploadVideo(
     throw new Error(`PE upload init failed: ${initRes.status} — ${err}`);
   }
   const init: UploadInitResponse = await initRes.json();
-  console.log(`[PE] Got presigned URL, media_id=${init.media_id}`);
+  const mediaId = init.data.media_id;
+  const uploadUrl = init.data.upload_url;
+  console.log(`[PE] Got presigned URL, media_id=${mediaId}`);
 
   // Step 2: PUT the video bytes to the presigned URL
-  const putRes = await fetch(init.upload_url, {
+  const putRes = await fetch(uploadUrl, {
     method: "PUT",
     headers: { "Content-Type": "video/mp4" },
     body: videoBuffer,
@@ -204,7 +210,7 @@ export async function uploadVideo(
   console.log(`[PE] Video uploaded to storage`);
 
   // Step 3: Finalize the upload
-  const completeRes = await fetch(`${PE_BASE}/media/${init.media_id}/complete`, {
+  const completeRes = await fetch(`${PE_BASE}/media/${mediaId}/complete`, {
     method: "POST",
     headers: peHeaders(),
   });
@@ -213,9 +219,9 @@ export async function uploadVideo(
     throw new Error(`PE upload complete failed: ${completeRes.status} — ${err}`);
   }
   const complete: UploadCompleteResponse = await completeRes.json();
-  console.log(`[PE] Upload finalized, status=${complete.status}`);
+  console.log(`[PE] Upload finalized, status=${complete.data.status}`);
 
-  return init.media_id;
+  return mediaId;
 }
 
 // ---------------------------------------------------------------------------
@@ -226,6 +232,14 @@ type CreatePostResponse = {
   id: string;
   status: string;
   content: string;
+  scheduled_for?: string;
+};
+
+type PEPostResponse = {
+  data?: CreatePostResponse;
+  id?: string;
+  status?: string;
+  content?: string;
   scheduled_for?: string;
 };
 
@@ -301,7 +315,10 @@ export async function schedulePost(opts: {
     throw new Error(`PE create post failed: ${res.status} — ${err}`);
   }
 
-  return res.json() as Promise<CreatePostResponse>;
+  const raw: PEPostResponse = await res.json();
+  // PE may wrap in { data: {...} } or return flat
+  const post = raw.data || raw;
+  return post as CreatePostResponse;
 }
 
 // ---------------------------------------------------------------------------
