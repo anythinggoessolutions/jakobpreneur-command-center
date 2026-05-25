@@ -190,28 +190,16 @@ export default function GodTextAIPage() {
     setScheduleError(null);
     setScheduleResult(null);
     try {
-      // Build the scheduled time in Eastern: date + slot time → ISO UTC
-      // The API route handles timezone conversion
+      // Pass the Eastern time directly — PE applies the timezone field itself,
+      // so we must NOT convert to UTC (that would double-offset).
       const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
-      // Convert Eastern to UTC by using Intl to figure out offset
-      const eastern = new Date(scheduledFor);
-      const utcFormatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York",
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-      });
-      const parts = utcFormatter.formatToParts(eastern);
-      const g = (t: string) => parts.find((p) => p.type === t)?.value || "";
-      const easternISO = `${g("year")}-${g("month")}-${g("day")}T${g("hour")}:${g("minute")}:${g("second")}`;
-      const offset = new Date(easternISO + "Z").getTime() - new Date(new Date(easternISO + "Z").toLocaleString("en-US", { timeZone: "America/New_York" })).getTime();
-      const utcDate = new Date(new Date(scheduledFor + "Z").getTime() + offset);
 
       const res = await fetch("/api/godtext/post-everywhere/schedule", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           videoUrl: videoResult.videoUrl,
-          scheduledFor: utcDate.toISOString(),
+          scheduledFor,
         }),
       });
       const data = await res.json();

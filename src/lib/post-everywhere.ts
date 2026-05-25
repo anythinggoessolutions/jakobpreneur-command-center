@@ -326,51 +326,16 @@ export async function schedulePost(opts: {
 // ---------------------------------------------------------------------------
 
 /**
- * Build ISO 8601 UTC datetimes for all 5 daily slots on a given date.
- * Times are in US Eastern; this converts to UTC.
+ * Build Eastern-time datetimes for all 5 daily slots on a given date.
+ *
+ * Post Everywhere expects `scheduled_for` to be in the timezone specified by
+ * the `timezone` field (we always send "America/New_York"). Do NOT convert to
+ * UTC — PE applies the timezone offset itself, so converting would double-offset.
  *
  * @param dateStr — YYYY-MM-DD in Eastern time
  */
 export function buildDaySchedule(dateStr: string): string[] {
-  return DAILY_SLOTS.map((slot) => {
-    // Create date in Eastern time, then convert to UTC ISO string.
-    // We construct the date string and let the Intl API handle DST.
-    const eastern = new Date(`${dateStr}T${slot.time}:00`);
-
-    // Get the UTC offset for this specific date/time in Eastern
-    const formatter = new Intl.DateTimeFormat("en-US", {
-      timeZone: TIMEZONE,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
-
-    // Parse the Eastern time properly
-    const parts = formatter.formatToParts(eastern);
-    const get = (type: string) =>
-      parts.find((p) => p.type === type)?.value || "";
-
-    // Build a proper Eastern date, then find the offset
-    const easternStr = `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:${get("second")}`;
-
-    // Create date objects to find the offset
-    const utcDate = new Date(easternStr + "Z");
-    const easternDate = new Date(
-      utcDate.toLocaleString("en-US", { timeZone: TIMEZONE }),
-    );
-    const offsetMs = utcDate.getTime() - easternDate.getTime();
-
-    // Apply offset to get the correct UTC time
-    const correctUtc = new Date(
-      new Date(`${dateStr}T${slot.time}:00Z`).getTime() + offsetMs,
-    );
-
-    return correctUtc.toISOString();
-  });
+  return DAILY_SLOTS.map((slot) => `${dateStr}T${slot.time}:00`);
 }
 
 // ---------------------------------------------------------------------------
