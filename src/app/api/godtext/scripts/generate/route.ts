@@ -47,23 +47,49 @@ export async function POST(req: NextRequest) {
       platformHint?: string;
     };
 
-    const rizzRecords = await listRecords<RizzFields>(RIZZ_TABLE);
+    // Fetch rizz vault images + existing scripts in parallel
+    const [rizzRecords, scriptRecords] = await Promise.all([
+      listRecords<RizzFields>(RIZZ_TABLE),
+      listRecords<ScriptFields>(SCRIPTS_TABLE),
+    ]);
+
     const allImageUrls = rizzRecords
       .map((r) => r.fields["Image URL"])
       .filter((u): u is string => typeof u === "string" && u.length > 0);
 
+    // Extract recently-used woman names + platforms from existing scripts
+    // so we avoid repeats across separate Generate clicks, not just within a batch.
+    const recentNames: string[] = [];
+    const recentPlatforms: string[] = [];
+    for (const rec of scriptRecords) {
+      const json = rec.fields["Conversation JSON"];
+      if (!json) continue;
+      try {
+        const conv = JSON.parse(json) as { womanName?: string; platform?: string };
+        if (conv.womanName) recentNames.push(conv.womanName);
+        if (conv.platform) recentPlatforms.push(conv.platform);
+      } catch {
+        // skip unparseable
+      }
+    }
+    // Deduplicate — keep the last 15 names to avoid repeats without
+    // overwhelming the prompt. For platforms we only need the last few.
+    const recentUniqueNames = [...new Set(recentNames)].slice(-15);
+    const recentUniquePlatforms = [...new Set(recentPlatforms)];
+
     // Generate sequentially so a transient API blip on one doesn't blow
     // away the whole batch (failures are per-iteration). Each iteration
     // gets its own fresh shuffle of up to 6 reference images.
-    // Track used platforms to force rotation across the batch.
+    // Track used platforms + names to force rotation across the batch.
     const results: {
       success: boolean;
       recordId?: string;
       conversation?: unknown;
       error?: string;
     }[] = [];
-    const usedPlatforms: string[] = [];
-    const usedNames: string[] = [];
+    // Seed with names/platforms already used in existing scripts
+    const usedPlatforms: string[] = [...recentUniquePlatforms];
+    const usedNames: string[] = [...recentUniqueNames];
 
     for (let i = 0; i < count; i++) {
       try {
@@ -90,8 +116,9 @@ export async function POST(req: NextRequest) {
         // Track platform + name so the next iteration picks different ones
         usedPlatforms.push(conversation.platform);
         if (conversation.womanName) usedNames.push(conversation.womanName);
-        // Reset platform exclusions once all 4 are used (allow cycling again)
-        if (usedPlatforms.length >= 4) usedPlatforms.length = 0;
+        // Reset platform exclusions once all 4 are covered (allow cycling)
+        const uniquePlatformsUsed = new Set(usedPlatforms);
+        if (uniquePlatformsUsed.size >= 4) usedPlatforms.length = 0;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push({ success: false, error: msg });
