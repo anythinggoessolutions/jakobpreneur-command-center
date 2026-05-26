@@ -55,9 +55,8 @@ export default function GodTextAIPage() {
     scheduledFor: string;
   } | null>(null);
   const [scheduleDate, setScheduleDate] = useState(() => {
-    // Default to tomorrow
+    // Default to today
     const d = new Date();
-    d.setDate(d.getDate() + 1);
     return d.toISOString().split("T")[0];
   });
   const [scheduleSlot, setScheduleSlot] = useState("07:00");
@@ -655,7 +654,7 @@ export default function GodTextAIPage() {
                       >
                         {Array.from({ length: 14 }, (_, i) => {
                           const d = new Date();
-                          d.setDate(d.getDate() + i + 1);
+                          d.setDate(d.getDate() + i);
                           const val = d.toISOString().split("T")[0];
                           const label = d.toLocaleDateString("en-US", {
                             weekday: "short",
