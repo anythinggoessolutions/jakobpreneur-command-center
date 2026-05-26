@@ -116,7 +116,7 @@ Name rule:
  */
 export async function generateGodTextConversation(
   referenceImageUrls: string[] = [],
-  options: { scenarioHint?: string; platformHint?: string; excludePlatforms?: string[]; excludeNames?: string[] } = {},
+  options: { scenarioHint?: string; platformHint?: string; excludeNames?: string[] } = {},
 ): Promise<GodTextConversation> {
   // Cap image references to avoid blowing past the request size limit.
   // 6 images is plenty for stylistic transfer; more burns tokens for
@@ -140,15 +140,14 @@ export async function generateGodTextConversation(
 
   const hintParts: string[] = [];
   if (options.scenarioHint) hintParts.push(`Scenario hint: ${options.scenarioHint}`);
-  if (options.platformHint) hintParts.push(`Platform hint: ${options.platformHint}`);
-  if (options.excludePlatforms && options.excludePlatforms.length > 0) {
+  if (options.platformHint) {
     hintParts.push(
-      `EXCLUDE these platforms (already used in this batch): ${options.excludePlatforms.join(", ")}. Pick a DIFFERENT one.`
+      `MANDATORY PLATFORM: You MUST use "${options.platformHint}" as the platform for this conversation. This is not a suggestion — it is required.`
     );
   }
   if (options.excludeNames && options.excludeNames.length > 0) {
     hintParts.push(
-      `EXCLUDE these woman names (already used in this batch): ${options.excludeNames.join(", ")}. Pick a COMPLETELY DIFFERENT name.`
+      `EXCLUDE these woman names (already used): ${options.excludeNames.join(", ")}. Pick a COMPLETELY DIFFERENT name.`
     );
   }
 

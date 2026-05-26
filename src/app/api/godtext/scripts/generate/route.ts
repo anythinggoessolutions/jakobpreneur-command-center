@@ -57,47 +57,57 @@ export async function POST(req: NextRequest) {
       .map((r) => r.fields["Image URL"])
       .filter((u): u is string => typeof u === "string" && u.length > 0);
 
-    // Extract recently-used woman names + platforms from existing scripts
-    // so we avoid repeats across separate Generate clicks, not just within a batch.
+    // Extract recently-used woman names + platform counts from existing scripts
+    // so we avoid repeats across separate Generate clicks.
     const recentNames: string[] = [];
-    const recentPlatforms: string[] = [];
+    const ALL_PLATFORMS = ["Hinge", "Instagram", "Tinder", "iMessage"] as const;
+    const platformCounts: Record<string, number> = {
+      Hinge: 0, Instagram: 0, Tinder: 0, iMessage: 0,
+    };
     for (const rec of scriptRecords) {
       const json = rec.fields["Conversation JSON"];
       if (!json) continue;
       try {
         const conv = JSON.parse(json) as { womanName?: string; platform?: string };
         if (conv.womanName) recentNames.push(conv.womanName);
-        if (conv.platform) recentPlatforms.push(conv.platform);
+        if (conv.platform && conv.platform in platformCounts) {
+          platformCounts[conv.platform]++;
+        }
       } catch {
         // skip unparseable
       }
     }
-    // Deduplicate — keep the last 15 names to avoid repeats without
-    // overwhelming the prompt. For platforms we only need the last few.
-    const recentUniqueNames = [...new Set(recentNames)].slice(-15);
-    const recentUniquePlatforms = [...new Set(recentPlatforms)];
+    // Keep the last 15 names to avoid repeats without overwhelming the prompt.
+    const usedNames = [...new Set(recentNames)].slice(-15);
+
+    // Round-robin platform selection: sort by count (least-used first),
+    // then pick the next one in rotation for each script in the batch.
+    const platformQueue = [...ALL_PLATFORMS].sort(
+      (a, b) => platformCounts[a] - platformCounts[b],
+    );
+    let platformQueueIdx = 0;
 
     // Generate sequentially so a transient API blip on one doesn't blow
     // away the whole batch (failures are per-iteration). Each iteration
     // gets its own fresh shuffle of up to 6 reference images.
-    // Track used platforms + names to force rotation across the batch.
     const results: {
       success: boolean;
       recordId?: string;
       conversation?: unknown;
       error?: string;
     }[] = [];
-    // Seed with names/platforms already used in existing scripts
-    const usedPlatforms: string[] = [...recentUniquePlatforms];
-    const usedNames: string[] = [...recentUniqueNames];
 
     for (let i = 0; i < count; i++) {
       try {
         const shuffled = [...allImageUrls].sort(() => Math.random() - 0.5).slice(0, 6);
+
+        // Pick the next platform from the round-robin queue (least-used first)
+        const nextPlatform = platformQueue[platformQueueIdx % platformQueue.length];
+        platformQueueIdx++;
+
         const conversation = await generateGodTextConversation(shuffled, {
           scenarioHint,
-          platformHint,
-          excludePlatforms: usedPlatforms.length > 0 ? usedPlatforms : undefined,
+          platformHint: platformHint || nextPlatform,
           excludeNames: usedNames.length > 0 ? usedNames : undefined,
         });
 
@@ -113,12 +123,8 @@ export async function POST(req: NextRequest) {
         });
 
         results.push({ success: true, recordId: record.id, conversation });
-        // Track platform + name so the next iteration picks different ones
-        usedPlatforms.push(conversation.platform);
+        // Track name so the next iteration avoids it
         if (conversation.womanName) usedNames.push(conversation.womanName);
-        // Reset platform exclusions once all 4 are covered (allow cycling)
-        const uniquePlatformsUsed = new Set(usedPlatforms);
-        if (uniquePlatformsUsed.size >= 4) usedPlatforms.length = 0;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push({ success: false, error: msg });
