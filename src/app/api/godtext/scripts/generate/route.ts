@@ -55,12 +55,14 @@ export async function POST(req: NextRequest) {
     // Generate sequentially so a transient API blip on one doesn't blow
     // away the whole batch (failures are per-iteration). Each iteration
     // gets its own fresh shuffle of up to 6 reference images.
+    // Track used platforms to force rotation across the batch.
     const results: {
       success: boolean;
       recordId?: string;
       conversation?: unknown;
       error?: string;
     }[] = [];
+    const usedPlatforms: string[] = [];
 
     for (let i = 0; i < count; i++) {
       try {
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
         const conversation = await generateGodTextConversation(shuffled, {
           scenarioHint,
           platformHint,
+          excludePlatforms: usedPlatforms.length > 0 ? usedPlatforms : undefined,
         });
 
         // Persist the script for Phase B + the UI's "Generated Scripts" list.
@@ -82,6 +85,10 @@ export async function POST(req: NextRequest) {
         });
 
         results.push({ success: true, recordId: record.id, conversation });
+        // Track platform so the next iteration picks a different one
+        usedPlatforms.push(conversation.platform);
+        // Reset exclusions once all 4 are used (allow cycling again)
+        if (usedPlatforms.length >= 4) usedPlatforms.length = 0;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push({ success: false, error: msg });

@@ -93,8 +93,14 @@ Hook text rules:
 - Emojis allowed, max 1
 - NEVER mention JakobPreneur, the developer, or any other brand. GodText AI is the only brand referenced.
 
-Platform rule:
-- Pick the platform that best fits the scenario. Hinge for dating-app openers, Instagram for story replies/DMs, Tinder for matches, iMessage for post-number conversations.
+Platform rule — CRITICAL:
+- You MUST rotate across all four platforms evenly: Hinge, Instagram, Tinder, iMessage.
+- NEVER default to Instagram. Treat all four platforms as equally likely.
+- Hinge: dating-app openers, witty first messages, rose conversations
+- Instagram: story replies, DM slides, reel comments turned to DMs
+- Tinder: match openers, bio references, pickup lines
+- iMessage: post-number exchanges, date logistics, flirty follow-ups
+- If given an "exclude platforms" hint, you MUST pick a DIFFERENT platform from those listed.
 
 Name rule:
 - Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Vary ethnicity, length, and vibe — Sofia, Jess, Aaliyah, Priya, Chloe, Destiny, Nadia, Lauren, Mia, etc. No two consecutive scripts should share a name.`;
@@ -110,7 +116,7 @@ Name rule:
  */
 export async function generateGodTextConversation(
   referenceImageUrls: string[] = [],
-  options: { scenarioHint?: string; platformHint?: string } = {},
+  options: { scenarioHint?: string; platformHint?: string; excludePlatforms?: string[] } = {},
 ): Promise<GodTextConversation> {
   // Cap image references to avoid blowing past the request size limit.
   // 6 images is plenty for stylistic transfer; more burns tokens for
@@ -135,6 +141,11 @@ export async function generateGodTextConversation(
   const hintParts: string[] = [];
   if (options.scenarioHint) hintParts.push(`Scenario hint: ${options.scenarioHint}`);
   if (options.platformHint) hintParts.push(`Platform hint: ${options.platformHint}`);
+  if (options.excludePlatforms && options.excludePlatforms.length > 0) {
+    hintParts.push(
+      `EXCLUDE these platforms (already used in this batch): ${options.excludePlatforms.join(", ")}. Pick a DIFFERENT one.`
+    );
+  }
 
   userContent.push({
     type: "text",
