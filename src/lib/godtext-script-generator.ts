@@ -116,7 +116,7 @@ Name rule:
  */
 export async function generateGodTextConversation(
   referenceImageUrls: string[] = [],
-  options: { scenarioHint?: string; platformHint?: string; excludePlatforms?: string[] } = {},
+  options: { scenarioHint?: string; platformHint?: string; excludePlatforms?: string[]; excludeNames?: string[] } = {},
 ): Promise<GodTextConversation> {
   // Cap image references to avoid blowing past the request size limit.
   // 6 images is plenty for stylistic transfer; more burns tokens for
@@ -144,6 +144,11 @@ export async function generateGodTextConversation(
   if (options.excludePlatforms && options.excludePlatforms.length > 0) {
     hintParts.push(
       `EXCLUDE these platforms (already used in this batch): ${options.excludePlatforms.join(", ")}. Pick a DIFFERENT one.`
+    );
+  }
+  if (options.excludeNames && options.excludeNames.length > 0) {
+    hintParts.push(
+      `EXCLUDE these woman names (already used in this batch): ${options.excludeNames.join(", ")}. Pick a COMPLETELY DIFFERENT name.`
     );
   }
 

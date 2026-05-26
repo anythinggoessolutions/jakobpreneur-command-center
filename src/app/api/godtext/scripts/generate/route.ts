@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
       error?: string;
     }[] = [];
     const usedPlatforms: string[] = [];
+    const usedNames: string[] = [];
 
     for (let i = 0; i < count; i++) {
       try {
@@ -71,6 +72,7 @@ export async function POST(req: NextRequest) {
           scenarioHint,
           platformHint,
           excludePlatforms: usedPlatforms.length > 0 ? usedPlatforms : undefined,
+          excludeNames: usedNames.length > 0 ? usedNames : undefined,
         });
 
         // Persist the script for Phase B + the UI's "Generated Scripts" list.
@@ -85,9 +87,10 @@ export async function POST(req: NextRequest) {
         });
 
         results.push({ success: true, recordId: record.id, conversation });
-        // Track platform so the next iteration picks a different one
+        // Track platform + name so the next iteration picks different ones
         usedPlatforms.push(conversation.platform);
-        // Reset exclusions once all 4 are used (allow cycling again)
+        if (conversation.womanName) usedNames.push(conversation.womanName);
+        // Reset platform exclusions once all 4 are used (allow cycling again)
         if (usedPlatforms.length >= 4) usedPlatforms.length = 0;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
