@@ -12,6 +12,11 @@ export const maxDuration = 300;
 
 const execAsync = promisify(execFile);
 
+// Absolute paths — Node child processes launched via LaunchAgent / auto-start
+// don't inherit the user's shell PATH, so /opt/homebrew/bin isn't available.
+const FFMPEG = "/opt/homebrew/bin/ffmpeg";
+const FFPROBE = "/opt/homebrew/bin/ffprobe";
+
 const FRAME_W = 1080;
 const FRAME_H = 1920;
 const FPS = 30;
@@ -245,7 +250,7 @@ async function ffmpegAssemble(
   for (const seg of segments) {
     const outVid = path.join(jobDir, `seg-${pad(segIdx)}.mp4`);
     if (seg.kind === "image") {
-      await execAsync("ffmpeg", [
+      await execAsync(FFMPEG, [
         "-y", "-loop", "1", "-i", seg.path,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-t", String(seg.duration),
@@ -257,7 +262,7 @@ async function ffmpegAssemble(
         outVid,
       ]);
     } else {
-      await execAsync("ffmpeg", [
+      await execAsync(FFMPEG, [
         "-y", "-i", seg.path,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-map", "0:v:0", "-map", "1:a:0",
@@ -281,7 +286,7 @@ async function ffmpegAssemble(
   );
 
   const rawConcat = path.join(jobDir, "raw-concat.mp4");
-  await execAsync("ffmpeg", [
+  await execAsync(FFMPEG, [
     "-y", "-f", "concat", "-safe", "0", "-i", concatList,
     "-c:v", "libx264", "-pix_fmt", "yuv420p",
     "-c:a", "aac", "-ar", "44100",
@@ -290,7 +295,7 @@ async function ffmpegAssemble(
   ]);
 
   if (musicPath) {
-    const probeResult = await execAsync("ffprobe", [
+    const probeResult = await execAsync(FFPROBE, [
       "-v", "error",
       "-show_entries", "format=duration",
       "-of", "default=noprint_wrappers=1:nokey=1",
@@ -300,7 +305,7 @@ async function ffmpegAssemble(
     const fadeOutStart = Math.max(0, videoDur - 2);
 
     await execAsync(
-      "ffmpeg",
+      FFMPEG,
       [
         "-y",
         "-i", rawConcat,
