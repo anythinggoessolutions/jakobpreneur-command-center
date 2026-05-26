@@ -92,11 +92,12 @@ export default function GodTextAIPage() {
       for (const post of posts) {
         const sf = post.scheduled_for;
         if (!sf) continue;
-        // Parse the scheduled_for datetime and extract date + nearest slot
+        // Parse the scheduled_for datetime and extract date + nearest slot.
+        // PE stores Eastern time with a fake Z suffix, so use UTC to read
+        // the raw values without any timezone shift.
         const dt = new Date(sf);
-        // Format date as YYYY-MM-DD in Eastern time
-        const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-        const hours = dt.toLocaleString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
+        const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "UTC" });
+        const hours = dt.toLocaleString("en-US", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
         // Match to the nearest slot time (within 30 min)
         const hhmm = hours.replace(/ /g, "").trim();
         const [h, m] = hhmm.split(":").map(Number);
@@ -957,6 +958,7 @@ function ScheduledPostsFeed() {
                     ).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
+                      timeZone: "UTC",
                     })}
                     <br />
                     {new Date(
@@ -964,7 +966,7 @@ function ScheduledPostsFeed() {
                     ).toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
-                      timeZone: "America/New_York",
+                      timeZone: "UTC",
                     })}
                   </div>
                 ) : (
