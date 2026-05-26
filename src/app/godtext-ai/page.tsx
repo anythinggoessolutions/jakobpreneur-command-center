@@ -132,9 +132,15 @@ export default function GodTextAIPage() {
     setAssembleError(null);
     setVideoResult(null);
     try {
-      // Build the video directly — no separate worker needed.
-      // The API route launches Playwright + ffmpeg inline.
-      const res = await fetch("/api/godtext/videos/build", {
+      // Video building needs Playwright + ffmpeg which only run on the local Mac.
+      // The production site (jakobprenuer.com) calls localhost:3000 for this.
+      // If already on localhost, use a relative path.
+      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+      const buildUrl = isLocal
+        ? "/api/godtext/videos/build"
+        : "http://localhost:3000/api/godtext/videos/build";
+
+      const res = await fetch(buildUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation, theme: videoTheme }),
@@ -150,7 +156,14 @@ export default function GodTextAIPage() {
         videoUrl: data.videoUrl,
       });
     } catch (err) {
-      setAssembleError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        setAssembleError(
+          "Can't reach your Mac. Make sure it's on and the Command Center Server is running."
+        );
+      } else {
+        setAssembleError(msg);
+      }
     } finally {
       setAssembling(false);
     }

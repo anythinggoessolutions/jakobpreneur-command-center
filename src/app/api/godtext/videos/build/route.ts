@@ -482,6 +482,20 @@ async function buildVideo(
 }
 
 // ---------------------------------------------------------------------------
+// CORS — allows the production site (jakobprenuer.com) to call localhost
+// ---------------------------------------------------------------------------
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// ---------------------------------------------------------------------------
 // POST /api/godtext/videos/build
 // ---------------------------------------------------------------------------
 
@@ -489,6 +503,9 @@ async function buildVideo(
  * Builds a GodText AI video inline — no separate worker needed.
  * Launches Playwright to screenshot frames, encodes with ffmpeg,
  * uploads the MP4 to Vercel Blob. Only works locally (npm run dev).
+ *
+ * The production site at jakobprenuer.com calls this endpoint on
+ * localhost:3000 — CORS headers allow the cross-origin request.
  *
  * Body: { conversation: object, theme?: "dark" | "white" }
  * Returns: { videoUrl: string }
@@ -523,11 +540,11 @@ export async function POST(req: NextRequest) {
     const filename = `godtext-videos/${path.basename(videoPath)}`;
     const blobUrl = await uploadToBlob(videoPath, filename);
 
-    return NextResponse.json({ videoUrl: blobUrl });
+    return NextResponse.json({ videoUrl: blobUrl }, { headers: CORS_HEADERS });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Video Build] Error:", msg);
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500, headers: CORS_HEADERS });
   } finally {
     // Clean up temp files
     try {

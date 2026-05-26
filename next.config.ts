@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Store .next build cache outside Desktop so the auto-start Launch Agent
+  // can write to it (macOS blocks background writes to ~/Desktop).
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // @napi-rs/canvas and sharp both have native .node bindings that can't be
   // bundled by Turbopack. Marking them server-external means Next treats them
   // as regular Node.js modules at runtime instead of trying to include them
