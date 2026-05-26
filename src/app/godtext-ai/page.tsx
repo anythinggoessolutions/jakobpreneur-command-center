@@ -61,6 +61,8 @@ export default function GodTextAIPage() {
     return d.toISOString().split("T")[0];
   });
   const [scheduleSlot, setScheduleSlot] = useState("07:00");
+  // Map of "YYYY-MM-DD|HH:MM" → true for slots that already have a post scheduled
+  const [bookedSlots, setBookedSlots] = useState<Record<string, boolean>>({});
 
   const conversation = conversations[activeConvIdx] ?? null;
 
@@ -77,9 +79,48 @@ export default function GodTextAIPage() {
     }
   }, []);
 
+  // Fetch scheduled posts to know which time slots are already booked
+  const fetchBookedSlots = useCallback(async () => {
+    try {
+      const res = await fetch("/api/godtext/post-everywhere/posts?status=scheduled", {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const posts = Array.isArray(data.posts) ? data.posts : [];
+      const slots: Record<string, boolean> = {};
+      const SLOT_TIMES = ["07:00", "11:30", "14:30", "18:00", "21:00"];
+      for (const post of posts) {
+        const sf = post.scheduled_for;
+        if (!sf) continue;
+        // Parse the scheduled_for datetime and extract date + nearest slot
+        const dt = new Date(sf);
+        // Format date as YYYY-MM-DD in Eastern time
+        const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+        const hours = dt.toLocaleString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
+        // Match to the nearest slot time (within 30 min)
+        const hhmm = hours.replace(/ /g, "").trim();
+        const [h, m] = hhmm.split(":").map(Number);
+        const totalMins = h * 60 + m;
+        for (const slot of SLOT_TIMES) {
+          const [sh, sm] = slot.split(":").map(Number);
+          const slotMins = sh * 60 + sm;
+          if (Math.abs(totalMins - slotMins) <= 30) {
+            slots[`${dateStr}|${slot}`] = true;
+            break;
+          }
+        }
+      }
+      setBookedSlots(slots);
+    } catch {
+      // non-fatal
+    }
+  }, []);
+
   useEffect(() => {
     fetchSavedScripts();
-  }, [fetchSavedScripts]);
+    fetchBookedSlots();
+  }, [fetchSavedScripts, fetchBookedSlots]);
 
   const loadScript = (script: typeof savedScripts[number]) => {
     if (!script.conversation) return;
@@ -202,6 +243,8 @@ export default function GodTextAIPage() {
         status: data.status,
         scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
       });
+      // Refresh booked slots so the UI immediately reflects the new booking
+      fetchBookedSlots();
     } catch (err) {
       setScheduleError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -599,7 +642,14 @@ export default function GodTextAIPage() {
                       <span className="text-green-600 mx-1">|</span>
                       <select
                         value={scheduleDate}
-                        onChange={(e) => setScheduleDate(e.target.value)}
+                        onChange={(e) => {
+                          const newDate = e.target.value;
+                          setScheduleDate(newDate);
+                          // Auto-select the first available slot for this date
+                          const slots = ["07:00", "11:30", "14:30", "18:00", "21:00"];
+                          const firstOpen = slots.find((s) => !bookedSlots[`${newDate}|${s}`]);
+                          if (firstOpen) setScheduleSlot(firstOpen);
+                        }}
                         disabled={scheduling}
                         className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
                       >
@@ -612,9 +662,13 @@ export default function GodTextAIPage() {
                             month: "short",
                             day: "numeric",
                           });
+                          const slotsTotal = 5;
+                          const slotsBooked = ["07:00", "11:30", "14:30", "18:00", "21:00"]
+                            .filter((s) => bookedSlots[`${val}|${s}`]).length;
+                          const slotsOpen = slotsTotal - slotsBooked;
                           return (
                             <option key={val} value={val}>
-                              {label}
+                              {label}{slotsBooked > 0 ? ` (${slotsOpen}/${slotsTotal} open)` : ""}
                             </option>
                           );
                         })}
@@ -625,11 +679,24 @@ export default function GodTextAIPage() {
                         disabled={scheduling}
                         className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
                       >
-                        <option value="07:00">7:00 AM — Early morning</option>
-                        <option value="11:30">11:30 AM — Lunch break</option>
-                        <option value="14:30">2:30 PM — Afternoon peak</option>
-                        <option value="18:00">6:00 PM — Post-work</option>
-                        <option value="21:00">9:00 PM — Night scroll</option>
+                        {[
+                          { value: "07:00", label: "7:00 AM — Early morning" },
+                          { value: "11:30", label: "11:30 AM — Lunch break" },
+                          { value: "14:30", label: "2:30 PM — Afternoon peak" },
+                          { value: "18:00", label: "6:00 PM — Post-work" },
+                          { value: "21:00", label: "9:00 PM — Night scroll" },
+                        ].map((slot) => {
+                          const isBooked = bookedSlots[`${scheduleDate}|${slot.value}`];
+                          return (
+                            <option
+                              key={slot.value}
+                              value={slot.value}
+                              disabled={isBooked}
+                            >
+                              {slot.label}{isBooked ? " ✓ BOOKED" : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                       <button
                         onClick={runSchedule}
