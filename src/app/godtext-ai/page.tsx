@@ -342,6 +342,45 @@ export default function GodTextAIPage() {
           )}
         </section>
 
+        {/* --- Section 2.8: Cooking Screen Preview --- */}
+        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-zinc-900">Cooking Screen Preview</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Preview the GodText AI cooking / reveal screens that play
+                during video beats. These are the actual app UI components.
+              </p>
+            </div>
+            <select
+              value={cookingPreview}
+              onChange={(e) => setCookingPreview(e.target.value as typeof cookingPreview)}
+              className="rounded border border-zinc-200 bg-white text-xs px-2 py-2"
+            >
+              <option value="off">Select preview…</option>
+              <option value="dark-cooking">Dark — Cooking</option>
+              <option value="dark-reveal">Dark — Reveal</option>
+              <option value="white-cooking">White — Cooking</option>
+              <option value="white-reveal">White — Reveal</option>
+            </select>
+          </div>
+          {cookingPreview !== "off" && (
+            <div className="flex justify-center py-4 bg-zinc-100 rounded-lg">
+              {cookingPreview.startsWith("white") ? (
+                <GodTextCookingWhite
+                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
+                  scale={0.55}
+                />
+              ) : (
+                <GodTextCookingDark
+                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
+                  scale={0.55}
+                />
+              )}
+            </div>
+          )}
+        </section>
+
         {/* --- Section 3: Video Generator --- */}
         <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
           <div className="flex items-start justify-between mb-3">
@@ -490,45 +529,6 @@ export default function GodTextAIPage() {
                   />
                 ) : null}
               </div>
-            </div>
-          )}
-        </section>
-
-        {/* --- Section 3.5: Cooking Screen Preview --- */}
-        <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-bold text-zinc-900">Cooking Screen Preview</h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                Preview the GodText AI cooking / reveal screens that play
-                during video beats. These are the actual app UI components.
-              </p>
-            </div>
-            <select
-              value={cookingPreview}
-              onChange={(e) => setCookingPreview(e.target.value as typeof cookingPreview)}
-              className="rounded border border-zinc-200 bg-white text-xs px-2 py-2"
-            >
-              <option value="off">Select preview…</option>
-              <option value="dark-cooking">Dark — Cooking</option>
-              <option value="dark-reveal">Dark — Reveal</option>
-              <option value="white-cooking">White — Cooking</option>
-              <option value="white-reveal">White — Reveal</option>
-            </select>
-          </div>
-          {cookingPreview !== "off" && (
-            <div className="flex justify-center py-4 bg-zinc-100 rounded-lg">
-              {cookingPreview.startsWith("white") ? (
-                <GodTextCookingWhite
-                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
-                  scale={0.55}
-                />
-              ) : (
-                <GodTextCookingDark
-                  phase={cookingPreview.endsWith("cooking") ? "cooking" : "reveal"}
-                  scale={0.55}
-                />
-              )}
             </div>
           )}
         </section>
