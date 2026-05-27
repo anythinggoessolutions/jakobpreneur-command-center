@@ -101,11 +101,18 @@ async function fetchHookBackgrounds(): Promise<string[]> {
     .map((r: { fields: Record<string, unknown> }) => r.fields["Video URL"] as string);
 }
 
-async function fetchBaddiePhotos(): Promise<string[]> {
+type BaddiePhoto = { id: string; url: string };
+
+async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return [];
   const url = new URL(
     `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
+  );
+  // Only fetch photos that haven't been used yet
+  url.searchParams.set(
+    "filterByFormula",
+    'OR({Used Count} = 0, {Used Count} = BLANK())',
   );
   const res = await fetch(url.toString(), {
     headers: airtableHeaders(),
@@ -114,8 +121,24 @@ async function fetchBaddiePhotos(): Promise<string[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return (data.records || [])
-    .filter((r: { fields: Record<string, unknown> }) => r.fields["Image URL"])
-    .map((r: { fields: Record<string, unknown> }) => r.fields["Image URL"] as string);
+    .filter((r: { id: string; fields: Record<string, unknown> }) => r.fields["Image URL"])
+    .map((r: { id: string; fields: Record<string, unknown> }) => ({
+      id: r.id,
+      url: r.fields["Image URL"] as string,
+    }));
+}
+
+async function markBaddieUsed(recordId: string): Promise<void> {
+  const base = process.env.AIRTABLE_BASE_ID;
+  if (!base) return;
+  await fetch(
+    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}/${recordId}`,
+    {
+      method: "PATCH",
+      headers: airtableHeaders(),
+      body: JSON.stringify({ fields: { "Used Count": 1 } }),
+    },
+  );
 }
 
 async function fetchRandomMusicUrl(): Promise<string | null> {
@@ -376,12 +399,12 @@ async function buildVideo(
   // Use the same dev server that's running this API route
   const baseUrl = "http://localhost:3000";
 
-  // Fetch hype clips, music, hook backgrounds, and baddie photos from vaults
-  const [hypeClips, musicUrl, hookBgUrls, baddieUrls] = await Promise.all([
+  // Fetch hype clips, music, hook backgrounds, and unused baddie photos from vaults
+  const [hypeClips, musicUrl, hookBgUrls, unusedBaddies] = await Promise.all([
     fetchHypeClips(),
     fetchRandomMusicUrl(),
     fetchHookBackgrounds(),
-    fetchBaddiePhotos(),
+    fetchUnusedBaddiePhotos(),
   ]);
 
   // Download music if available
@@ -462,11 +485,14 @@ async function buildVideo(
 
     // ---------------------------------------------------------------
     // Baddie reveal: full-screen photo after hook (2.5s), safe-zone aware
+    // Each baddie is used only once — marked in Airtable after use.
     // ---------------------------------------------------------------
-    if (baddieUrls.length > 0) {
-      const baddieUrl = baddieUrls[Math.floor(Math.random() * baddieUrls.length)];
+    if (unusedBaddies.length > 0) {
+      const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
       const baddieDlPath = path.join(jobDir, `baddie-${frameIdx}.jpg`);
-      await downloadFile(baddieUrl, baddieDlPath);
+      await downloadFile(baddie.url, baddieDlPath);
+      // Mark this baddie as used so no future video picks her
+      await markBaddieUsed(baddie.id);
 
       // Compose the baddie into a 1080x1920 frame using ffmpeg:
       // - Scale to fill width (1080px)
@@ -642,6 +668,10 @@ export async function POST(req: NextRequest) {
 
     await fs.mkdir(jobDir, { recursive: true });
 
+    // Check how many unused baddies remain BEFORE building (build will use one)
+    const unusedBefore = await fetchUnusedBaddiePhotos();
+    const baddiesRemaining = Math.max(0, unusedBefore.length - 1); // minus the one this build will use
+
     // Build the video
     const videoPath = await buildVideo(
       conversation,
@@ -653,7 +683,17 @@ export async function POST(req: NextRequest) {
     const filename = `godtext-videos/${path.basename(videoPath)}`;
     const blobUrl = await uploadToBlob(videoPath, filename);
 
-    return NextResponse.json({ videoUrl: blobUrl }, { headers: CORS_HEADERS });
+    const warnings: string[] = [];
+    if (baddiesRemaining === 0) {
+      warnings.push("No baddie photos left! Ask Claude to generate more.");
+    } else if (baddiesRemaining <= 5) {
+      warnings.push(`Only ${baddiesRemaining} baddie photos remaining — time to generate more soon.`);
+    }
+
+    return NextResponse.json(
+      { videoUrl: blobUrl, baddiesRemaining, warnings },
+      { headers: CORS_HEADERS },
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[Video Build] Error:", msg);

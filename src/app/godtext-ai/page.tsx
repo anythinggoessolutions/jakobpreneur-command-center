@@ -193,7 +193,7 @@ export default function GodTextAIPage() {
         outputPath: "",
         durationSeconds: 0,
         frameCount: 0,
-        warnings: [],
+        warnings: data.warnings || [],
         videoUrl: data.videoUrl,
       });
     } catch (err) {
@@ -645,6 +645,14 @@ export default function GodTextAIPage() {
                 <div className="font-semibold text-green-800 mb-2">
                   Video ready! 🎬
                 </div>
+
+                {videoResult.warnings.length > 0 && (
+                  <div className="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                    {videoResult.warnings.map((w, i) => (
+                      <div key={i}>{w}</div>
+                    ))}
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center gap-2">
                   <a
