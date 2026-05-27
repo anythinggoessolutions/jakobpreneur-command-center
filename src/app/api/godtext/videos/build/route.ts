@@ -240,7 +240,6 @@ type PlaywrightPage = {
   screenshot: (opts: {
     type?: string;
     clip?: { x: number; y: number; width: number; height: number };
-    omitBackground?: boolean;
   }) => Promise<Buffer>;
   evaluate: (expr: string) => Promise<unknown>;
   close: () => Promise<void>;
@@ -271,7 +270,6 @@ async function screenshotFrame(
   baseUrl: string,
   outputPath: string,
   params: Record<string, string>,
-  opts?: { transparent?: boolean },
 ) {
   const url = new URL("/godtext-ai/render", baseUrl);
   for (const [k, v] of Object.entries(params)) {
@@ -291,20 +289,10 @@ async function screenshotFrame(
     );
   }
 
-  // For transparent overlays, remove html/body backgrounds so
-  // Playwright's omitBackground: true produces a proper alpha PNG.
-  if (opts?.transparent) {
-    await page.evaluate(
-      `document.documentElement.style.background = 'transparent';
-       document.body.style.background = 'transparent';`,
-    );
-  }
-
   await new Promise((r) => setTimeout(r, 500));
   const buffer = await page.screenshot({
     type: "png",
     clip: { x: 0, y: 0, width: FRAME_W, height: FRAME_H },
-    ...(opts?.transparent ? { omitBackground: true } : {}),
   });
   await fs.writeFile(outputPath, buffer);
 }
@@ -470,13 +458,13 @@ async function buildVideo(
       await downloadFile(hookBgUrl, hookBgPath);
 
       // Render branded text overlay via React (Syne + DM Sans fonts,
-      // "GodText AI" branding) as a transparent PNG, then composite
-      // it on top of the hook background video with ffmpeg.
+      // "GodText AI" branding) on a green-screen background, then use
+      // ffmpeg colorkey to strip the green and composite onto the video.
       const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
       await screenshotFrame(page, baseUrl, hookOverlayPath, {
         type: "hook-overlay",
         hook: conversation.hookText,
-      }, { transparent: true });
+      });
 
       const hookOutPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.mp4`);
       await execAsync(FFMPEG, [
@@ -484,11 +472,10 @@ async function buildVideo(
         "-i", hookBgPath,
         "-i", hookOverlayPath,
         "-filter_complex",
-        [
-          `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase,crop=${FRAME_W}:${FRAME_H}`,
-          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill[bg]`,
-          `[bg][1:v]overlay=0:0:shortest=1`,
-        ].join(","),
+        `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase,crop=${FRAME_W}:${FRAME_H},` +
+        `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill[bg];` +
+        `[1:v]colorkey=0x00FF00:0.3:0.15[txt];` +
+        `[bg][txt]overlay=0:0:shortest=1`,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
         "-an", "-preset", "fast", "-crf", "18",
         hookOutPath,
@@ -531,18 +518,19 @@ async function buildVideo(
       ];
       const baddieIntro = baddieIntros[Math.floor(Math.random() * baddieIntros.length)];
 
-      // Render branded intro text overlay via React as a transparent PNG
+      // Render branded intro text overlay via React on green-screen,
+      // then use ffmpeg colorkey to strip green and composite onto photo.
       const baddieOverlayPath = path.join(jobDir, `baddie-overlay-${frameIdx}.png`);
       await screenshotFrame(page, baseUrl, baddieOverlayPath, {
         type: "baddie-overlay",
         intro: baddieIntro,
-      }, { transparent: true });
+      });
 
       // Compose the baddie into a 1080x1920 frame using ffmpeg:
       // - Scale to fill width (1080px)
       // - Centre the face in the safe zone (y=250 to y=1520, height=1270)
       // - Black background for any letterboxing
-      // - Overlay branded intro text PNG on top
+      // - Overlay branded intro text (green-keyed) on top
       const baddieFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-baddie.png`);
       await execAsync(FFMPEG, [
         "-y",
@@ -552,7 +540,8 @@ async function buildVideo(
         "-filter_complex",
         `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,1270):0:(ih-min(ih\\,1270))/2[baddie];` +
         `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1[composed];` +
-        `[composed][2:v]overlay=0:0:shortest=1`,
+        `[2:v]colorkey=0x00FF00:0.3:0.15[txt];` +
+        `[composed][txt]overlay=0:0:shortest=1`,
         "-frames:v", "1",
         baddieFramePath,
       ]);

@@ -639,7 +639,7 @@ function HookOverlay({ hookText }: { hookText: string }) {
       style={{
         width: FRAME_W,
         height: FRAME_H,
-        background: "transparent",
+        background: "#00FF00",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -713,7 +713,7 @@ function BaddieOverlay({ introText }: { introText: string }) {
       style={{
         width: FRAME_W,
         height: FRAME_H,
-        background: "transparent",
+        background: "#00FF00",
         position: "relative",
         overflow: "hidden",
       }}
