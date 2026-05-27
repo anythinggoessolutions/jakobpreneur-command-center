@@ -169,16 +169,24 @@ async function fetchRandomMusicUrl(): Promise<string | null> {
 function pickHypeClip(
   clips: HypeClip[],
   escalation: string,
+  usedUrls: Set<string>,
 ): HypeClip | null {
   // maximum → big hype clips (anime, sports dunks, celebrations)
-  // high/medium → memes (funny reactions, images)
+  // high/medium/low → memes (funny reactions, images)
   const preferred =
     escalation === "maximum"
       ? clips.filter((c) => c.clipType === "Hype Clip")
       : clips.filter((c) => c.clipType === "Meme");
   const pool = preferred.length > 0 ? preferred : clips;
-  if (pool.length === 0) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
+
+  // Filter out already-used clips this build so we get variety
+  const available = pool.filter((c) => !usedUrls.has(c.url));
+  const finalPool = available.length > 0 ? available : pool; // fallback to repeats if exhausted
+  if (finalPool.length === 0) return null;
+
+  const pick = finalPool[Math.floor(Math.random() * finalPool.length)];
+  usedUrls.add(pick.url);
+  return pick;
 }
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -437,6 +445,8 @@ async function buildVideo(
 
   const segments: Segment[] = [];
   let frameIdx = 0;
+  // Track used clips per build so no hype clip repeats in one video
+  const usedClipUrls = new Set<string>();
 
   try {
     // ---------------------------------------------------------------
@@ -448,12 +458,28 @@ async function buildVideo(
       await downloadFile(hookBgUrl, hookBgPath);
 
       // Overlay hook text on the background video using ffmpeg drawtext
+      // with word-wrapping via textfile instead of inline text
       const hookOutPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.mp4`);
-      const escapedHook = conversation.hookText
-        .replace(/\\/g, "\\\\\\\\")
-        .replace(/'/g, "'\\''")
-        .replace(/:/g, "\\:")
-        .replace(/%/g, "%%");
+
+      // Write hook text to a file — avoids shell escaping issues and lets
+      // drawtext handle it cleanly. We manually insert newlines to word-wrap
+      // so the text fits within the safe zone (920px wide at fontsize 58).
+      const maxCharsPerLine = 22; // ~22 chars per line at fontsize 58 in safe zone
+      const words = conversation.hookText.split(/\s+/);
+      const lines: string[] = [];
+      let currentLine = "";
+      for (const word of words) {
+        if (currentLine.length + word.length + 1 > maxCharsPerLine && currentLine.length > 0) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = currentLine ? `${currentLine} ${word}` : word;
+        }
+      }
+      if (currentLine) lines.push(currentLine);
+      const wrappedHook = lines.join("\n");
+      const hookTextFile = path.join(jobDir, "hook-text.txt");
+      await fs.writeFile(hookTextFile, wrappedHook);
 
       await execAsync(FFMPEG, [
         "-y", "-i", hookBgPath,
@@ -463,8 +489,8 @@ async function buildVideo(
           `crop=${FRAME_W}:${FRAME_H}`,
           // Dark overlay for text readability
           `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill`,
-          // Hook text — centred, wrapping, large white bold text in safe zone
-          `drawtext=text='${escapedHook}':fontsize=64:fontcolor=white:borderw=3:bordercolor=black@0.6:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=12`,
+          // Hook text — centred, word-wrapped, large white bold text in safe zone
+          `drawtext=textfile='${hookTextFile}':fontsize=58:fontcolor=white:borderw=3:bordercolor=black@0.6:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=16`,
         ].join(","),
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
         "-an", "-preset", "fast", "-crf", "18",
@@ -486,6 +512,7 @@ async function buildVideo(
     // ---------------------------------------------------------------
     // Baddie reveal: full-screen photo after hook (2.5s), safe-zone aware
     // Each baddie is used only once — marked in Airtable after use.
+    // Includes intro text like "this is who we're texting today 👀"
     // ---------------------------------------------------------------
     if (unusedBaddies.length > 0) {
       const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
@@ -494,19 +521,37 @@ async function buildVideo(
       // Mark this baddie as used so no future video picks her
       await markBaddieUsed(baddie.id);
 
+      // Pick a random baddie intro line
+      const baddieIntros = [
+        "this is who we're texting today",
+        "today's target",
+        "she has no idea what's coming",
+        "watch me cook",
+        "this is who we're rizzing up",
+        "let's get her number",
+        "she's about to fall in love",
+        "today's lucky girl",
+      ];
+      const baddieIntro = baddieIntros[Math.floor(Math.random() * baddieIntros.length)];
+      const baddieIntroFile = path.join(jobDir, "baddie-intro.txt");
+      await fs.writeFile(baddieIntroFile, baddieIntro);
+
       // Compose the baddie into a 1080x1920 frame using ffmpeg:
       // - Scale to fill width (1080px)
       // - Centre the face in the safe zone (y=250 to y=1520, height=1270)
       // - Black background for any letterboxing
+      // - Overlay intro text at the top of the safe zone
       const baddieFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-baddie.png`);
       await execAsync(FFMPEG, [
         "-y",
         "-f", "lavfi", "-i", `color=c=black:s=${FRAME_W}x${FRAME_H}:d=1`,
         "-i", baddieDlPath,
         "-filter_complex",
-        // Scale baddie to fill width, crop to safe zone height, overlay centred
+        // Scale baddie to fill width, crop to safe zone height, overlay centred,
+        // then add intro text at the top of the safe zone
         `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,1270):0:(ih-min(ih\\,1270))/2[baddie];` +
-        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1`,
+        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1,` +
+        `drawtext=textfile='${baddieIntroFile}':fontsize=46:fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-text_w)/2:y=280:line_spacing=12`,
         "-frames:v", "1",
         baddieFramePath,
       ]);
@@ -579,20 +624,21 @@ async function buildVideo(
       frameIdx++;
 
       // Splice hype clips / memes after woman messages based on escalation:
-      //   medium  → 50% chance of a meme
+      //   low     → 30% chance of a meme (keeps some energy even early)
+      //   medium  → always a meme
       //   high    → always a meme
-      //   maximum → always a hype clip
-      // low escalation gets nothing (keeps pacing tight at the start)
+      //   maximum → always a hype clip (big animated/video clip)
       if (msg.sender === "woman" && hypeClips.length > 0) {
         const esc = msg.escalation_level || "low";
         const shouldInsert =
           esc === "maximum" ||
           esc === "high" ||
-          (esc === "medium" && Math.random() < 0.5);
+          esc === "medium" ||
+          (esc === "low" && Math.random() < 0.3);
 
         if (shouldInsert) {
           try {
-            const clip = pickHypeClip(hypeClips, esc);
+            const clip = pickHypeClip(hypeClips, esc, usedClipUrls);
             if (clip) {
               const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
               await downloadFile(clip.url, clipPath);
