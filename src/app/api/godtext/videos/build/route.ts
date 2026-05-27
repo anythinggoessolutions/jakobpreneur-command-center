@@ -84,6 +84,40 @@ async function fetchHypeClips(): Promise<HypeClip[]> {
     }));
 }
 
+async function fetchHookBackgrounds(): Promise<string[]> {
+  const base = process.env.AIRTABLE_BASE_ID;
+  if (!base) return [];
+  const url = new URL(
+    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Hook Backgrounds")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records || [])
+    .filter((r: { fields: Record<string, unknown> }) => r.fields["Video URL"])
+    .map((r: { fields: Record<string, unknown> }) => r.fields["Video URL"] as string);
+}
+
+async function fetchBaddiePhotos(): Promise<string[]> {
+  const base = process.env.AIRTABLE_BASE_ID;
+  if (!base) return [];
+  const url = new URL(
+    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.records || [])
+    .filter((r: { fields: Record<string, unknown> }) => r.fields["Image URL"])
+    .map((r: { fields: Record<string, unknown> }) => r.fields["Image URL"] as string);
+}
+
 async function fetchRandomMusicUrl(): Promise<string | null> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return null;
@@ -342,10 +376,12 @@ async function buildVideo(
   // Use the same dev server that's running this API route
   const baseUrl = "http://localhost:3000";
 
-  // Fetch hype clips and music from the vaults
-  const [hypeClips, musicUrl] = await Promise.all([
+  // Fetch hype clips, music, hook backgrounds, and baddie photos from vaults
+  const [hypeClips, musicUrl, hookBgUrls, baddieUrls] = await Promise.all([
     fetchHypeClips(),
     fetchRandomMusicUrl(),
+    fetchHookBackgrounds(),
+    fetchBaddiePhotos(),
   ]);
 
   // Download music if available
@@ -380,14 +416,77 @@ async function buildVideo(
   let frameIdx = 0;
 
   try {
-    // Hook frame
-    const hookPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.png`);
-    await screenshotFrame(page, baseUrl, hookPath, {
-      type: "hook",
-      hook: conversation.hookText,
-    });
-    segments.push({ kind: "image", path: hookPath, duration: TIMING.hook });
-    frameIdx++;
+    // ---------------------------------------------------------------
+    // Hook: video background + text overlay, or static screenshot fallback
+    // ---------------------------------------------------------------
+    if (hookBgUrls.length > 0) {
+      const hookBgUrl = hookBgUrls[Math.floor(Math.random() * hookBgUrls.length)];
+      const hookBgPath = path.join(jobDir, `hook-bg-${frameIdx}.mp4`);
+      await downloadFile(hookBgUrl, hookBgPath);
+
+      // Overlay hook text on the background video using ffmpeg drawtext
+      const hookOutPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.mp4`);
+      const escapedHook = conversation.hookText
+        .replace(/\\/g, "\\\\\\\\")
+        .replace(/'/g, "'\\''")
+        .replace(/:/g, "\\:")
+        .replace(/%/g, "%%");
+
+      await execAsync(FFMPEG, [
+        "-y", "-i", hookBgPath,
+        "-vf",
+        [
+          `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase`,
+          `crop=${FRAME_W}:${FRAME_H}`,
+          // Dark overlay for text readability
+          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill`,
+          // Hook text — centred, wrapping, large white bold text in safe zone
+          `drawtext=text='${escapedHook}':fontsize=64:fontcolor=white:borderw=3:bordercolor=black@0.6:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=12`,
+        ].join(","),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
+        "-an", "-preset", "fast", "-crf", "18",
+        hookOutPath,
+      ]);
+      segments.push({ kind: "video", path: hookOutPath });
+      frameIdx++;
+    } else {
+      // Fallback: static hook screenshot
+      const hookPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.png`);
+      await screenshotFrame(page, baseUrl, hookPath, {
+        type: "hook",
+        hook: conversation.hookText,
+      });
+      segments.push({ kind: "image", path: hookPath, duration: TIMING.hook });
+      frameIdx++;
+    }
+
+    // ---------------------------------------------------------------
+    // Baddie reveal: full-screen photo after hook (2.5s), safe-zone aware
+    // ---------------------------------------------------------------
+    if (baddieUrls.length > 0) {
+      const baddieUrl = baddieUrls[Math.floor(Math.random() * baddieUrls.length)];
+      const baddieDlPath = path.join(jobDir, `baddie-${frameIdx}.jpg`);
+      await downloadFile(baddieUrl, baddieDlPath);
+
+      // Compose the baddie into a 1080x1920 frame using ffmpeg:
+      // - Scale to fill width (1080px)
+      // - Centre the face in the safe zone (y=250 to y=1520, height=1270)
+      // - Black background for any letterboxing
+      const baddieFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-baddie.png`);
+      await execAsync(FFMPEG, [
+        "-y",
+        "-f", "lavfi", "-i", `color=c=black:s=${FRAME_W}x${FRAME_H}:d=1`,
+        "-i", baddieDlPath,
+        "-filter_complex",
+        // Scale baddie to fill width, crop to safe zone height, overlay centred
+        `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,1270):0:(ih-min(ih\\,1270))/2[baddie];` +
+        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1`,
+        "-frames:v", "1",
+        baddieFramePath,
+      ]);
+      segments.push({ kind: "image", path: baddieFramePath, duration: 2.5 });
+      frameIdx++;
+    }
 
     // Walk through messages
     const visibleMessages: { sender: string; text: string }[] = [];

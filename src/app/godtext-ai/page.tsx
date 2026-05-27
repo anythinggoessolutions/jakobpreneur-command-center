@@ -333,6 +333,26 @@ export default function GodTextAIPage() {
           />
         </section>
 
+        {/* --- Section 2.55: Hook Backgrounds Vault --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="hook-backgrounds"
+            title="Hook Backgrounds"
+            description="Short action videos (3-5s) that play behind the hook text at the start of each video. Upload or generate with Higgs Field."
+            defaultCollapsed
+          />
+        </section>
+
+        {/* --- Section 2.6: Baddie Photos Vault --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="baddie-photos"
+            title="Baddie Photos"
+            description="AI-generated photos of the woman being texted. Shown for 2-3s after the hook. Generate 35/week for 5 videos/day."
+            defaultCollapsed
+          />
+        </section>
+
         {/* --- Section 2.75: Saved Scripts --- */}
         <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
           <div className="flex items-start justify-between mb-3">

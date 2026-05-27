@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { upload } from "@vercel/blob/client";
 
-type VaultKind = "rizz" | "ui-refs" | "hype-clips" | "music";
+type VaultKind = "rizz" | "ui-refs" | "hype-clips" | "music" | "hook-backgrounds" | "baddie-photos";
 
 type VaultRecord = {
   id: string;
@@ -67,6 +67,18 @@ const KIND_CONFIG: Record<
     accept: "audio/mpeg,audio/mp3,audio/wav,audio/mp4,audio/x-m4a,audio/aac",
     accentClass: "border-violet-200 bg-violet-50/40",
   },
+  "hook-backgrounds": {
+    route: "/api/godtext/hook-backgrounds",
+    urlField: "Video URL",
+    accept: "video/mp4,video/quicktime,video/webm",
+    accentClass: "border-cyan-200 bg-cyan-50/40",
+  },
+  "baddie-photos": {
+    route: "/api/godtext/baddie-photos",
+    urlField: "Image URL",
+    accept: "image/png,image/jpeg,image/webp",
+    accentClass: "border-pink-200 bg-pink-50/40",
+  },
 };
 
 /**
@@ -129,8 +141,8 @@ export default function GodTextVaultGrid({ kind, title, description, defaultColl
           });
           // Register the new record in Airtable.
           const body: Record<string, unknown> = { name: file.name };
-          if (kind === "rizz" || kind === "ui-refs") body.imageUrl = blob.url;
-          if (kind === "hype-clips") body.mediaUrl = blob.url;
+          if (kind === "rizz" || kind === "ui-refs" || kind === "baddie-photos") body.imageUrl = blob.url;
+          if (kind === "hype-clips" || kind === "hook-backgrounds") body.mediaUrl = blob.url;
           if (kind === "music") body.audioUrl = blob.url;
           for (const ef of config.extraFields || []) {
             body[ef.key] = extraValues[ef.key];
@@ -263,7 +275,7 @@ export default function GodTextVaultGrid({ kind, title, description, defaultColl
         <div className="text-xs text-zinc-400">Loading…</div>
       ) : records.length === 0 ? (
         <div className="text-xs text-zinc-400">Nothing here yet.</div>
-      ) : kind === "music" || kind === "hype-clips" ? (
+      ) : kind === "music" || kind === "hype-clips" || kind === "hook-backgrounds" ? (
         <div className="flex flex-col gap-1">
           {records.map((rec) => (
             kind === "music" ? (
@@ -321,10 +333,10 @@ function VaultTile({
     <div className="relative group rounded-lg overflow-hidden border border-zinc-200 bg-white">
       {/* Preview */}
       <div className="aspect-[4/5] bg-zinc-100 flex items-center justify-center overflow-hidden">
-        {kind === "rizz" || kind === "ui-refs" ? (
+        {kind === "rizz" || kind === "ui-refs" || kind === "baddie-photos" ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt={name} className="w-full h-full object-cover" />
-        ) : kind === "hype-clips" ? (
+        ) : kind === "hype-clips" || kind === "hook-backgrounds" ? (
           <video src={url} className="w-full h-full object-cover" muted preload="metadata" />
         ) : (
           <div className="p-3 flex flex-col items-center justify-center w-full h-full">
