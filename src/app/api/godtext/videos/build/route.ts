@@ -113,6 +113,8 @@ function pickHypeClip(
   clips: HypeClip[],
   escalation: string,
 ): HypeClip | null {
+  // maximum → big hype clips (anime, sports dunks, celebrations)
+  // high/medium → memes (funny reactions, images)
   const preferred =
     escalation === "maximum"
       ? clips.filter((c) => c.clipType === "Hype Clip")
@@ -451,23 +453,30 @@ async function buildVideo(
       });
       frameIdx++;
 
-      // Splice a hype clip after high/maximum escalation woman messages
-      if (
-        msg.sender === "woman" &&
-        (msg.escalation_level === "high" ||
-          msg.escalation_level === "maximum") &&
-        hypeClips.length > 0
-      ) {
-        try {
-          const clip = pickHypeClip(hypeClips, msg.escalation_level);
-          if (clip) {
-            const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
-            await downloadFile(clip.url, clipPath);
-            segments.push({ kind: "video", path: clipPath });
-            frameIdx++;
+      // Splice hype clips / memes after woman messages based on escalation:
+      //   medium  → 50% chance of a meme
+      //   high    → always a meme
+      //   maximum → always a hype clip
+      // low escalation gets nothing (keeps pacing tight at the start)
+      if (msg.sender === "woman" && hypeClips.length > 0) {
+        const esc = msg.escalation_level || "low";
+        const shouldInsert =
+          esc === "maximum" ||
+          esc === "high" ||
+          (esc === "medium" && Math.random() < 0.5);
+
+        if (shouldInsert) {
+          try {
+            const clip = pickHypeClip(hypeClips, esc);
+            if (clip) {
+              const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
+              await downloadFile(clip.url, clipPath);
+              segments.push({ kind: "video", path: clipPath });
+              frameIdx++;
+            }
+          } catch {
+            // Non-fatal — skip hype clip
           }
-        } catch {
-          // Non-fatal — skip hype clip
         }
       }
     }
