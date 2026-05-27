@@ -623,31 +623,21 @@ async function buildVideo(
       });
       frameIdx++;
 
-      // Splice hype clips / memes after woman messages based on escalation:
-      //   low     → 30% chance of a meme (keeps some energy even early)
-      //   medium  → always a meme
-      //   high    → always a meme
-      //   maximum → always a hype clip (big animated/video clip)
+      // Always splice a hype clip or meme after every woman message.
+      // maximum escalation → big hype clips (anime, sports, celebrations)
+      // everything else    → memes (funny reactions, images)
       if (msg.sender === "woman" && hypeClips.length > 0) {
         const esc = msg.escalation_level || "low";
-        const shouldInsert =
-          esc === "maximum" ||
-          esc === "high" ||
-          esc === "medium" ||
-          (esc === "low" && Math.random() < 0.3);
-
-        if (shouldInsert) {
-          try {
-            const clip = pickHypeClip(hypeClips, esc, usedClipUrls);
-            if (clip) {
-              const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
-              await downloadFile(clip.url, clipPath);
-              segments.push({ kind: "video", path: clipPath });
-              frameIdx++;
-            }
-          } catch {
-            // Non-fatal — skip hype clip
+        try {
+          const clip = pickHypeClip(hypeClips, esc, usedClipUrls);
+          if (clip) {
+            const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
+            await downloadFile(clip.url, clipPath);
+            segments.push({ kind: "video", path: clipPath });
+            frameIdx++;
           }
+        } catch {
+          // Non-fatal — skip hype clip
         }
       }
     }
