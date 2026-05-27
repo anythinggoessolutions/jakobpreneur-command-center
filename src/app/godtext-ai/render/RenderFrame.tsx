@@ -202,7 +202,6 @@ export default function RenderFrame() {
 
 function SafeConversationFrame({
   platform,
-  womanName,
   messages,
 }: {
   platform: PhonePlatform;
@@ -211,28 +210,13 @@ function SafeConversationFrame({
 }) {
   const s = PLATFORM_STYLES[platform] || PLATFORM_STYLES.iMessage;
 
-  // Layout constants within the safe zone
-  const BRAND_Y = SAFE_TOP + 20;       // GodText AI branding
-  const BRAND_H = 45;
-  const HEADER_Y = BRAND_Y + BRAND_H + 16; // Woman name header
-  const HEADER_H = 50;
-  const MSG_TOP = HEADER_Y + HEADER_H + 20; // Messages start
-  const MSG_BOTTOM = SAFE_BOTTOM - 20;       // Messages end
-  const MSG_AREA_H = MSG_BOTTOM - MSG_TOP;   // ~1099px
-
-  // Auto-scale font if too many messages
-  // Base: 34px font, ~85px per message (padding + line + gap)
-  const baseFont = 34;
-  const baseGap = 14;
-  const basePadV = 18;
-  const basePadH = 26;
-  const estPerMsg = baseFont * 1.3 + basePadV * 2 + baseGap;
-  const totalEst = messages.length * estPerMsg;
-  const scaleFactor = totalEst > MSG_AREA_H ? MSG_AREA_H / totalEst : 1;
-  const fontSize = Math.max(22, Math.round(baseFont * scaleFactor));
-  const gap = Math.max(8, Math.round(baseGap * scaleFactor));
-  const padV = Math.max(12, Math.round(basePadV * scaleFactor));
-  const padH = Math.max(18, Math.round(basePadH * scaleFactor));
+  // Clean centered layout — just the latest 1-2 messages as big bubbles
+  // in the center of the safe zone. No header, no avatar, no branding.
+  // Matches the competitor style: easy to read, back-and-forth flow.
+  const fontSize = 42;
+  const padV = 24;
+  const padH = 36;
+  const gap = 28;
 
   return (
     <div
@@ -245,125 +229,19 @@ function SafeConversationFrame({
         fontFamily: s.fontFamily,
       }}
     >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600;700&display=swap');
-      `}</style>
-
-      {/* Subtle background glow */}
+      {/* Messages — centered in safe zone, big and readable */}
       <div
         style={{
           position: "absolute",
-          width: 800,
-          height: 800,
-          borderRadius: "50%",
-          background: `radial-gradient(circle, ${s.accent}15 0%, transparent 70%)`,
-          top: "45%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          pointerEvents: "none",
-        }}
-      />
-
-      {/* GodText AI branding — inside safe zone */}
-      <div
-        style={{
-          position: "absolute",
-          top: BRAND_Y,
+          top: SAFE_TOP,
+          bottom: FRAME_H - SAFE_BOTTOM,
           left: SAFE_LEFT,
           right: FRAME_W - SAFE_RIGHT,
-          height: BRAND_H,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 2,
-        }}
-      >
-        <div
-          style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: 32,
-            fontWeight: 800,
-            color: "rgba(255,255,255,0.35)",
-            letterSpacing: "-0.02em",
-          }}
-        >
-          GodText{" "}
-          <span style={{ color: `${s.accent}80` }}>AI</span>
-        </div>
-      </div>
-
-      {/* Chat header — woman name + avatar */}
-      <div
-        style={{
-          position: "absolute",
-          top: HEADER_Y,
-          left: SAFE_LEFT,
-          right: FRAME_W - SAFE_RIGHT,
-          height: HEADER_H,
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          paddingLeft: 10,
-          zIndex: 2,
-        }}
-      >
-        {/* Avatar */}
-        <div
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: "50%",
-            background: "linear-gradient(135deg,#ff8aae,#ffd2ad)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            color: "#fff",
-            fontSize: 18,
-            fontFamily: s.fontFamily,
-            flexShrink: 0,
-          }}
-        >
-          {womanName.slice(0, 1).toUpperCase()}
-        </div>
-        <div
-          style={{
-            fontSize: 28,
-            fontWeight: 600,
-            color: s.headerText,
-          }}
-        >
-          {womanName}
-        </div>
-      </div>
-
-      {/* Separator line */}
-      <div
-        style={{
-          position: "absolute",
-          top: HEADER_Y + HEADER_H + 4,
-          left: SAFE_LEFT,
-          right: FRAME_W - SAFE_RIGHT,
-          height: 1,
-          background: "rgba(255,255,255,0.08)",
-          zIndex: 2,
-        }}
-      />
-
-      {/* Messages — all within safe zone */}
-      <div
-        style={{
-          position: "absolute",
-          top: MSG_TOP,
-          left: SAFE_LEFT,
-          width: SAFE_RIGHT - SAFE_LEFT,
-          height: MSG_AREA_H,
           display: "flex",
           flexDirection: "column",
           gap,
-          overflow: "hidden",
+          justifyContent: "center",
           zIndex: 2,
-          justifyContent: "flex-end",
         }}
       >
         {messages.map((m, i) => {
@@ -380,15 +258,16 @@ function SafeConversationFrame({
             >
               <div
                 style={{
-                  maxWidth: "72%",
+                  maxWidth: "85%",
                   padding: `${padV}px ${padH}px`,
-                  borderRadius: 28,
+                  borderRadius: 32,
                   background: bubble,
                   color: txt,
                   fontSize,
-                  lineHeight: 1.3,
-                  borderBottomRightRadius: isMan ? 8 : 28,
-                  borderBottomLeftRadius: isMan ? 28 : 8,
+                  fontWeight: 500,
+                  lineHeight: 1.35,
+                  borderBottomRightRadius: isMan ? 10 : 32,
+                  borderBottomLeftRadius: isMan ? 32 : 10,
                 }}
               >
                 {renderBlurred(m.text)}

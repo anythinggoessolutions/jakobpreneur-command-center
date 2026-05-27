@@ -593,8 +593,10 @@ async function buildVideo(
         frameIdx++;
       }
 
-      // Phone screen with this message added
+      // Phone screen — show only the last 2 messages (the latest exchange)
+      // for readability. Big centered bubbles, no clutter.
       visibleMessages.push({ sender: msg.sender, text: msg.text });
+      const recentMessages = visibleMessages.slice(-2);
       const phonePath = path.join(
         jobDir,
         `frame-${pad(frameIdx)}-phone.png`,
@@ -602,7 +604,7 @@ async function buildVideo(
       await screenshotFrame(page, baseUrl, phonePath, {
         type: "phone",
         platform: conversation.platform,
-        messages: JSON.stringify(visibleMessages),
+        messages: JSON.stringify(recentMessages),
         ...(conversation.womanName
           ? { womanName: conversation.womanName }
           : {}),
@@ -622,9 +624,16 @@ async function buildVideo(
         try {
           const clip = pickHypeClip(hypeClips, esc, usedClipUrls);
           if (clip) {
-            const clipPath = path.join(jobDir, `clip-${frameIdx}.mp4`);
+            // Detect whether this clip is a static image or animated/video
+            const isStaticImage = /\.(png|jpe?g|webp)(\?|$)/i.test(clip.url);
+            const ext = isStaticImage ? "png" : "mp4";
+            const clipPath = path.join(jobDir, `clip-${frameIdx}.${ext}`);
             await downloadFile(clip.url, clipPath);
-            segments.push({ kind: "video", path: clipPath });
+            if (isStaticImage) {
+              segments.push({ kind: "image", path: clipPath, duration: 1.5 });
+            } else {
+              segments.push({ kind: "video", path: clipPath });
+            }
             frameIdx++;
           }
         } catch {
