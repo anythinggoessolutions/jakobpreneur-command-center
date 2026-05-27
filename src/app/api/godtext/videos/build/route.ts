@@ -469,13 +469,14 @@ async function buildVideo(
       const hookOutPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.mp4`);
       await execAsync(FFMPEG, [
         "-y",
-        "-i", hookBgPath,
-        "-i", hookOverlayPath,
+        "-stream_loop", "-1", "-i", hookBgPath,
+        "-loop", "1", "-i", hookOverlayPath,
+        "-t", "4",
         "-filter_complex",
         `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase,crop=${FRAME_W}:${FRAME_H},` +
         `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill[bg];` +
         `[1:v]colorkey=0x00FF00:0.3:0.15[txt];` +
-        `[bg][txt]overlay=0:0:shortest=1`,
+        `[bg][txt]overlay=0:0`,
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
         "-an", "-preset", "fast", "-crf", "18",
         hookOutPath,
@@ -545,7 +546,7 @@ async function buildVideo(
         "-frames:v", "1",
         baddieFramePath,
       ]);
-      segments.push({ kind: "image", path: baddieFramePath, duration: 2.5 });
+      segments.push({ kind: "image", path: baddieFramePath, duration: 3.0 });
       frameIdx++;
     }
 
