@@ -104,6 +104,14 @@ export default function RenderFrame() {
     return <HookFrame hookText={params.get("hook") || ""} />;
   }
 
+  if (type === "hook-overlay") {
+    return <HookOverlay hookText={params.get("hook") || ""} />;
+  }
+
+  if (type === "baddie-overlay") {
+    return <BaddieOverlay introText={params.get("intro") || ""} />;
+  }
+
   if (type === "reply") {
     const replyText = params.get("reply") || "";
     const theme = params.get("theme") || "dark";
@@ -615,6 +623,132 @@ function ReplyFrame({ replyText, theme }: { replyText: string; theme: string }) 
         >
           Send it
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Hook overlay — transparent background, branded text only
+// Used as a PNG overlay on top of hook background videos
+// ---------------------------------------------------------------------------
+
+function HookOverlay({ hookText }: { hookText: string }) {
+  return (
+    <div
+      style={{
+        width: FRAME_W,
+        height: FRAME_H,
+        background: "transparent",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@500;600;700&display=swap');
+      `}</style>
+
+      {/* Content — constrained to safe zone */}
+      <div
+        style={{
+          position: "absolute",
+          top: SAFE_TOP,
+          bottom: FRAME_H - SAFE_BOTTOM,
+          left: SAFE_LEFT,
+          right: FRAME_W - SAFE_RIGHT,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 40,
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 52,
+            fontWeight: 800,
+            color: "#fff",
+            letterSpacing: "-0.02em",
+            textShadow: "0 2px 20px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+          }}
+        >
+          GodText{" "}
+          <span style={{ color: "#FF4400" }}>AI</span>
+        </div>
+
+        <p
+          style={{
+            fontFamily: "'DM Sans', system-ui, sans-serif",
+            fontSize: 52,
+            fontWeight: 700,
+            color: "rgba(255,255,255,0.95)",
+            textAlign: "center",
+            lineHeight: 1.25,
+            maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
+            margin: 0,
+            textShadow: "0 2px 16px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+          }}
+        >
+          {hookText}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Baddie overlay — transparent background, intro text only
+// Used as a PNG overlay on top of baddie photo frames
+// ---------------------------------------------------------------------------
+
+function BaddieOverlay({ introText }: { introText: string }) {
+  return (
+    <div
+      style={{
+        width: FRAME_W,
+        height: FRAME_H,
+        background: "transparent",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&display=swap');
+      `}</style>
+
+      {/* Intro text at the top of safe zone */}
+      <div
+        style={{
+          position: "absolute",
+          top: SAFE_TOP + 20,
+          left: SAFE_LEFT,
+          right: FRAME_W - SAFE_RIGHT,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1,
+        }}
+      >
+        <p
+          style={{
+            fontFamily: "'DM Sans', system-ui, sans-serif",
+            fontSize: 44,
+            fontWeight: 700,
+            color: "#fff",
+            textAlign: "center",
+            lineHeight: 1.3,
+            margin: 0,
+            textShadow: "0 2px 16px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+          }}
+        >
+          {introText}
+        </p>
       </div>
     </div>
   );

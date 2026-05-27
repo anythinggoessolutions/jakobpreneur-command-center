@@ -240,6 +240,7 @@ type PlaywrightPage = {
   screenshot: (opts: {
     type?: string;
     clip?: { x: number; y: number; width: number; height: number };
+    omitBackground?: boolean;
   }) => Promise<Buffer>;
   evaluate: (expr: string) => Promise<unknown>;
   close: () => Promise<void>;
@@ -270,6 +271,7 @@ async function screenshotFrame(
   baseUrl: string,
   outputPath: string,
   params: Record<string, string>,
+  opts?: { transparent?: boolean },
 ) {
   const url = new URL("/godtext-ai/render", baseUrl);
   for (const [k, v] of Object.entries(params)) {
@@ -289,10 +291,20 @@ async function screenshotFrame(
     );
   }
 
+  // For transparent overlays, remove html/body backgrounds so
+  // Playwright's omitBackground: true produces a proper alpha PNG.
+  if (opts?.transparent) {
+    await page.evaluate(
+      `document.documentElement.style.background = 'transparent';
+       document.body.style.background = 'transparent';`,
+    );
+  }
+
   await new Promise((r) => setTimeout(r, 500));
   const buffer = await page.screenshot({
     type: "png",
     clip: { x: 0, y: 0, width: FRAME_W, height: FRAME_H },
+    ...(opts?.transparent ? { omitBackground: true } : {}),
   });
   await fs.writeFile(outputPath, buffer);
 }
@@ -457,40 +469,25 @@ async function buildVideo(
       const hookBgPath = path.join(jobDir, `hook-bg-${frameIdx}.mp4`);
       await downloadFile(hookBgUrl, hookBgPath);
 
-      // Overlay hook text on the background video using ffmpeg drawtext
-      // with word-wrapping via textfile instead of inline text
+      // Render branded text overlay via React (Syne + DM Sans fonts,
+      // "GodText AI" branding) as a transparent PNG, then composite
+      // it on top of the hook background video with ffmpeg.
+      const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
+      await screenshotFrame(page, baseUrl, hookOverlayPath, {
+        type: "hook-overlay",
+        hook: conversation.hookText,
+      }, { transparent: true });
+
       const hookOutPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.mp4`);
-
-      // Write hook text to a file — avoids shell escaping issues and lets
-      // drawtext handle it cleanly. We manually insert newlines to word-wrap
-      // so the text fits within the safe zone (920px wide at fontsize 58).
-      const maxCharsPerLine = 22; // ~22 chars per line at fontsize 58 in safe zone
-      const words = conversation.hookText.split(/\s+/);
-      const lines: string[] = [];
-      let currentLine = "";
-      for (const word of words) {
-        if (currentLine.length + word.length + 1 > maxCharsPerLine && currentLine.length > 0) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = currentLine ? `${currentLine} ${word}` : word;
-        }
-      }
-      if (currentLine) lines.push(currentLine);
-      const wrappedHook = lines.join("\n");
-      const hookTextFile = path.join(jobDir, "hook-text.txt");
-      await fs.writeFile(hookTextFile, wrappedHook);
-
       await execAsync(FFMPEG, [
-        "-y", "-i", hookBgPath,
-        "-vf",
+        "-y",
+        "-i", hookBgPath,
+        "-i", hookOverlayPath,
+        "-filter_complex",
         [
-          `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase`,
-          `crop=${FRAME_W}:${FRAME_H}`,
-          // Dark overlay for text readability
-          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill`,
-          // Hook text — centred, word-wrapped, large white bold text in safe zone
-          `drawtext=textfile='${hookTextFile}':fontsize=58:fontcolor=white:borderw=3:bordercolor=black@0.6:x=(w-text_w)/2:y=(h-text_h)/2:line_spacing=16`,
+          `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase,crop=${FRAME_W}:${FRAME_H}`,
+          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill[bg]`,
+          `[bg][1:v]overlay=0:0:shortest=1`,
         ].join(","),
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
         "-an", "-preset", "fast", "-crf", "18",
@@ -533,25 +530,29 @@ async function buildVideo(
         "today's lucky girl",
       ];
       const baddieIntro = baddieIntros[Math.floor(Math.random() * baddieIntros.length)];
-      const baddieIntroFile = path.join(jobDir, "baddie-intro.txt");
-      await fs.writeFile(baddieIntroFile, baddieIntro);
+
+      // Render branded intro text overlay via React as a transparent PNG
+      const baddieOverlayPath = path.join(jobDir, `baddie-overlay-${frameIdx}.png`);
+      await screenshotFrame(page, baseUrl, baddieOverlayPath, {
+        type: "baddie-overlay",
+        intro: baddieIntro,
+      }, { transparent: true });
 
       // Compose the baddie into a 1080x1920 frame using ffmpeg:
       // - Scale to fill width (1080px)
       // - Centre the face in the safe zone (y=250 to y=1520, height=1270)
       // - Black background for any letterboxing
-      // - Overlay intro text at the top of the safe zone
+      // - Overlay branded intro text PNG on top
       const baddieFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-baddie.png`);
       await execAsync(FFMPEG, [
         "-y",
         "-f", "lavfi", "-i", `color=c=black:s=${FRAME_W}x${FRAME_H}:d=1`,
         "-i", baddieDlPath,
+        "-i", baddieOverlayPath,
         "-filter_complex",
-        // Scale baddie to fill width, crop to safe zone height, overlay centred,
-        // then add intro text at the top of the safe zone
         `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,1270):0:(ih-min(ih\\,1270))/2[baddie];` +
-        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1,` +
-        `drawtext=textfile='${baddieIntroFile}':fontsize=46:fontcolor=white:borderw=3:bordercolor=black@0.7:x=(w-text_w)/2:y=280:line_spacing=12`,
+        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1[composed];` +
+        `[composed][2:v]overlay=0:0:shortest=1`,
         "-frames:v", "1",
         baddieFramePath,
       ]);
