@@ -22,7 +22,7 @@ const FRAME_H = 1920;
 const FPS = 30;
 const TIMING = {
   hook: 2.5,
-  message: 2.8,
+  message: 1.5,
   cookingStep: 1.0,
   reply: 2.0,
 };
@@ -171,12 +171,18 @@ function pickHypeClip(
   escalation: string,
   usedUrls: Set<string>,
 ): HypeClip | null {
-  // maximum → big hype clips (anime, sports dunks, celebrations)
-  // high/medium/low → memes (funny reactions, images)
-  const preferred =
-    escalation === "maximum"
-      ? clips.filter((c) => c.clipType === "Hype Clip")
-      : clips.filter((c) => c.clipType === "Meme");
+  // "maximum" (final woman message) → always a Hype Clip (animated GIF/video)
+  // everything else → 50/50 random between Meme and Hype Clip
+  let preferred: HypeClip[];
+  if (escalation === "maximum") {
+    preferred = clips.filter((c) => c.clipType === "Hype Clip");
+  } else {
+    // 50/50 coin flip between meme and hype clip
+    const wantMeme = Math.random() < 0.5;
+    preferred = clips.filter((c) =>
+      wantMeme ? c.clipType === "Meme" : c.clipType === "Hype Clip",
+    );
+  }
   const pool = preferred.length > 0 ? preferred : clips;
 
   // Filter out already-used clips this build so we get variety
@@ -450,16 +456,48 @@ async function buildVideo(
 
   try {
     // ---------------------------------------------------------------
-    // Hook: video background + text overlay, or static screenshot fallback
+    // Hook: baddie photo as background with branded hook text overlay.
+    // If no baddie available, falls back to hook video or static screen.
+    // "this is who we're rizzing today" intro feel — baddie + hook in one shot.
     // ---------------------------------------------------------------
-    if (hookBgUrls.length > 0) {
+    if (unusedBaddies.length > 0) {
+      // Baddie-as-hook: download baddie photo, overlay hook text on it
+      const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
+      const baddieDlPath = path.join(jobDir, `baddie-${frameIdx}.jpg`);
+      await downloadFile(baddie.url, baddieDlPath);
+      await markBaddieUsed(baddie.id);
+
+      // Render branded hook text overlay on green-screen
+      const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
+      await screenshotFrame(page, baseUrl, hookOverlayPath, {
+        type: "hook-overlay",
+        hook: conversation.hookText,
+      });
+
+      // Compose: baddie photo full-screen + dark overlay + branded hook text
+      const hookFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.png`);
+      await execAsync(FFMPEG, [
+        "-y",
+        "-f", "lavfi", "-i", `color=c=black:s=${FRAME_W}x${FRAME_H}:d=1`,
+        "-i", baddieDlPath,
+        "-i", hookOverlayPath,
+        "-filter_complex",
+        `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,${FRAME_H}):0:(ih-min(ih\\,${FRAME_H}))/2[baddie];` +
+        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1,` +
+        `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.45:t=fill[composed];` +
+        `[2:v]colorkey=0x00FF00:0.3:0.15[txt];` +
+        `[composed][txt]overlay=0:0:shortest=1`,
+        "-frames:v", "1",
+        hookFramePath,
+      ]);
+      segments.push({ kind: "image", path: hookFramePath, duration: 4.0 });
+      frameIdx++;
+    } else if (hookBgUrls.length > 0) {
+      // Fallback: hook video background + text overlay (no baddie available)
       const hookBgUrl = hookBgUrls[Math.floor(Math.random() * hookBgUrls.length)];
       const hookBgPath = path.join(jobDir, `hook-bg-${frameIdx}.mp4`);
       await downloadFile(hookBgUrl, hookBgPath);
 
-      // Render branded text overlay via React (Syne + DM Sans fonts,
-      // "GodText AI" branding) on a green-screen background, then use
-      // ffmpeg colorkey to strip the green and composite onto the video.
       const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
       await screenshotFrame(page, baseUrl, hookOverlayPath, {
         type: "hook-overlay",
@@ -484,69 +522,13 @@ async function buildVideo(
       segments.push({ kind: "video", path: hookOutPath });
       frameIdx++;
     } else {
-      // Fallback: static hook screenshot
+      // Last fallback: static hook screenshot
       const hookPath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.png`);
       await screenshotFrame(page, baseUrl, hookPath, {
         type: "hook",
         hook: conversation.hookText,
       });
       segments.push({ kind: "image", path: hookPath, duration: TIMING.hook });
-      frameIdx++;
-    }
-
-    // ---------------------------------------------------------------
-    // Baddie reveal: full-screen photo after hook (2.5s), safe-zone aware
-    // Each baddie is used only once — marked in Airtable after use.
-    // Includes intro text like "this is who we're texting today 👀"
-    // ---------------------------------------------------------------
-    if (unusedBaddies.length > 0) {
-      const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
-      const baddieDlPath = path.join(jobDir, `baddie-${frameIdx}.jpg`);
-      await downloadFile(baddie.url, baddieDlPath);
-      // Mark this baddie as used so no future video picks her
-      await markBaddieUsed(baddie.id);
-
-      // Pick a random baddie intro line
-      const baddieIntros = [
-        "this is who we're texting today",
-        "today's target",
-        "she has no idea what's coming",
-        "watch me cook",
-        "this is who we're rizzing up",
-        "let's get her number",
-        "she's about to fall in love",
-        "today's lucky girl",
-      ];
-      const baddieIntro = baddieIntros[Math.floor(Math.random() * baddieIntros.length)];
-
-      // Render branded intro text overlay via React on green-screen,
-      // then use ffmpeg colorkey to strip green and composite onto photo.
-      const baddieOverlayPath = path.join(jobDir, `baddie-overlay-${frameIdx}.png`);
-      await screenshotFrame(page, baseUrl, baddieOverlayPath, {
-        type: "baddie-overlay",
-        intro: baddieIntro,
-      });
-
-      // Compose the baddie into a 1080x1920 frame using ffmpeg:
-      // - Scale to fill width (1080px)
-      // - Centre the face in the safe zone (y=250 to y=1520, height=1270)
-      // - Black background for any letterboxing
-      // - Overlay branded intro text (green-keyed) on top
-      const baddieFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-baddie.png`);
-      await execAsync(FFMPEG, [
-        "-y",
-        "-f", "lavfi", "-i", `color=c=black:s=${FRAME_W}x${FRAME_H}:d=1`,
-        "-i", baddieDlPath,
-        "-i", baddieOverlayPath,
-        "-filter_complex",
-        `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,1270):0:(ih-min(ih\\,1270))/2[baddie];` +
-        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1[composed];` +
-        `[2:v]colorkey=0x00FF00:0.3:0.15[txt];` +
-        `[composed][txt]overlay=0:0:shortest=1`,
-        "-frames:v", "1",
-        baddieFramePath,
-      ]);
-      segments.push({ kind: "image", path: baddieFramePath, duration: 3.0 });
       frameIdx++;
     }
 
