@@ -22,7 +22,7 @@ const FRAME_H = 1920;
 const FPS = 30;
 const TIMING = {
   hook: 2.5,
-  message: 1.0,
+  message: 1.5,
   cookingStep: 1.0,
   reply: 2.0,
 };

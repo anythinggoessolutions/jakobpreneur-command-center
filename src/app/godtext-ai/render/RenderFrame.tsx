@@ -548,47 +548,33 @@ function HookOverlay({ hookText }: { hookText: string }) {
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@500;600;700&display=swap');
       `}</style>
 
-      {/* Content — constrained to safe zone */}
+      {/* Content — near top of safe zone so it doesn't cover the face */}
       <div
         style={{
           position: "absolute",
-          top: SAFE_TOP,
-          bottom: FRAME_H - SAFE_BOTTOM,
+          top: SAFE_TOP + 20,
           left: SAFE_LEFT,
           right: FRAME_W - SAFE_RIGHT,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          justifyContent: "center",
-          gap: 40,
+          gap: 12,
           zIndex: 1,
         }}
       >
         <div
           style={{
             fontFamily: "'Syne', sans-serif",
-            fontSize: 52,
+            fontSize: 80,
             fontWeight: 800,
-            color: "#fff",
-            letterSpacing: "-0.02em",
-            textShadow: "0 2px 20px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
-          }}
-        >
-          GodText{" "}
-          <span style={{ color: "#FF4400" }}>AI</span>
-        </div>
-
-        <div
-          style={{
-            fontFamily: "'DM Sans', system-ui, sans-serif",
-            fontSize: 52,
-            fontWeight: 700,
-            color: "rgba(255,255,255,0.95)",
+            color: "#FFFFFF",
             textAlign: "center",
-            lineHeight: 1.25,
-            maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
+            lineHeight: 1.15,
+            maxWidth: SAFE_RIGHT - SAFE_LEFT - 20,
             margin: 0,
-            textShadow: "0 2px 16px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+            WebkitTextStroke: "3px #000000",
+            paintOrder: "stroke fill",
+            textShadow: "0 3px 24px rgba(0,0,0,0.9), 0 1px 6px rgba(0,0,0,0.95)",
           }}
         >
           {hookText.split("\n").map((line, i) => (
@@ -596,7 +582,7 @@ function HookOverlay({ hookText }: { hookText: string }) {
               key={i}
               style={{
                 margin: 0,
-                marginTop: i > 0 ? 16 : 0,
+                marginTop: i > 0 ? 8 : 0,
               }}
             >
               {line}

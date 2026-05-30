@@ -22,25 +22,62 @@ function peHeaders(): Record<string, string> {
 }
 
 /**
- * Upload an image from a public URL to PostEverywhere's media library.
- * Returns the media UUID.
+ * Upload an image to PostEverywhere using the 3-step presigned URL flow.
+ * Downloads the image from a public URL, then uploads via PE's presigned flow.
  */
-async function uploadImageFromUrl(imageUrl: string): Promise<string> {
-  const res = await fetch(`${PE_BASE}/media/upload/url`, {
+async function uploadImage(imageUrl: string, index: number): Promise<string> {
+  // Step 0: Download the image
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
+  const imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+  const contentType = imgRes.headers.get("content-type") || "image/png";
+
+  // Step 1: Request presigned upload URL
+  const filename = `godtext-carousel-slide-${index}-${Date.now()}.png`;
+  const initRes = await fetch(`${PE_BASE}/media/upload`, {
     method: "POST",
     headers: peHeaders(),
-    body: JSON.stringify({ url: imageUrl }),
+    body: JSON.stringify({
+      filename,
+      content_type: contentType,
+      size: imageBuffer.length,
+      width: 1080,
+      height: 1920,
+    }),
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`PE image upload failed: ${res.status} — ${err}`);
+  if (!initRes.ok) {
+    const err = await initRes.text();
+    throw new Error(`PE upload init failed: ${initRes.status} — ${err}`);
   }
-  const data = await res.json();
-  // PE may wrap in { data: { media_id } } or flat
-  const mediaId = data?.data?.media_id || data?.media_id;
-  if (!mediaId) {
-    throw new Error(`PE image upload returned no media_id: ${JSON.stringify(data)}`);
+  const init = await initRes.json();
+  const mediaId = init?.data?.media_id;
+  const uploadUrl = init?.data?.upload_url;
+  if (!mediaId || !uploadUrl) {
+    throw new Error(`PE upload init missing fields: ${JSON.stringify(init)}`);
   }
+
+  // Step 2: PUT image bytes to the presigned URL
+  const putRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: imageBuffer,
+  });
+  if (!putRes.ok) {
+    const err = await putRes.text();
+    throw new Error(`PE presigned PUT failed: ${putRes.status} — ${err}`);
+  }
+
+  // Step 3: Finalize the upload
+  const completeRes = await fetch(`${PE_BASE}/media/${mediaId}/complete`, {
+    method: "POST",
+    headers: peHeaders(),
+  });
+  if (!completeRes.ok) {
+    const err = await completeRes.text();
+    throw new Error(`PE upload complete failed: ${completeRes.status} — ${err}`);
+  }
+
+  console.log(`[Carousel Schedule] Uploaded slide ${index}, media_id=${mediaId}`);
   return mediaId;
 }
 
@@ -73,13 +110,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. Upload all slide images to PE
+    // 1. Upload all slide images to PE via 3-step presigned URL flow
     console.log(`[Carousel Schedule] Uploading ${slideUrls.length} slides to PE...`);
     const mediaIds: string[] = [];
-    for (const url of slideUrls) {
-      const mediaId = await uploadImageFromUrl(url);
+    for (let i = 0; i < slideUrls.length; i++) {
+      const mediaId = await uploadImage(slideUrls[i], i);
       mediaIds.push(mediaId);
-      console.log(`[Carousel Schedule] Uploaded slide, media_id=${mediaId}`);
     }
 
     // 2. Generate caption
