@@ -22,7 +22,7 @@ const FRAME_H = 1920;
 const FPS = 30;
 const TIMING = {
   hook: 2.5,
-  message: 1.5,
+  message: 1.0,
   cookingStep: 1.0,
   reply: 2.0,
 };
@@ -468,10 +468,11 @@ async function buildVideo(
       await markBaddieUsed(baddie.id);
 
       // Render branded hook text overlay on green-screen
+      // Baddie intro always says "Texting huzz / Take notes"
       const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
       await screenshotFrame(page, baseUrl, hookOverlayPath, {
         type: "hook-overlay",
-        hook: conversation.hookText,
+        hook: "Texting huzz\n*Take notes*",
       });
 
       // Compose: baddie photo full-screen + dark overlay + branded hook text

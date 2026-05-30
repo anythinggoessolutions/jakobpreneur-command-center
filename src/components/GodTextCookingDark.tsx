@@ -3,13 +3,17 @@
 /**
  * GodText AI — Cooking / Reveal Screen (Dark Theme)
  *
- * Dark-mode variant of the cooking screen. 390x844 native.
- * Fonts: DM Sans + Syne. Background: #0C0C0E. Accent: #FF4400.
- * Features a grain overlay and glowing pulse animation on the
- * cooking modal.
+ * 9:16 SAFE ZONE LAYOUT (390x844 native, scaled by `scale` prop)
+ * ─────────────────────────────
+ * Top dead zone:    0–150px   (platform username, follow button, etc.)
+ * Safe zone:        150–674px (524px of usable space)
+ * Bottom dead zone: 674–844px (captions, like/comment/share buttons)
+ * ─────────────────────────────
+ * Strategy: Push the GodText header into the top dead zone. All
+ * meaningful content starts at ~150px and ends by ~670px.
  *
- * Same API as GodTextCookingWhite — drop-in swap via a `theme`
- * toggle in the video assembly pipeline.
+ * Fonts: DM Sans + Syne. Background: #0C0C0E. Accent: #FF4400.
+ * Features grain overlay and glowing pulse animation on cooking modal.
  */
 
 import { useState, useEffect } from "react";
@@ -56,6 +60,7 @@ export default function GodTextCookingDark({
 
   const W = 390 * scale;
   const H = 844 * scale;
+  const s = scale;
 
   return (
     <div
@@ -111,10 +116,14 @@ export default function GodTextCookingDark({
         }}
       />
 
-      {/* Header */}
+      {/* ═══ TOP DEAD ZONE (150px) ═══ */}
       <div
         style={{
-          padding: `${16 * scale}px ${20 * scale}px ${8 * scale}px`,
+          minHeight: 150 * s,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          padding: `0 ${20 * s}px ${8 * s}px`,
           position: "relative",
           zIndex: 10,
         }}
@@ -122,7 +131,7 @@ export default function GodTextCookingDark({
         <h1
           className="syne"
           style={{
-            fontSize: 22 * scale,
+            fontSize: 22 * s,
             fontWeight: 800,
             color: "#fff",
             letterSpacing: "-0.02em",
@@ -135,36 +144,50 @@ export default function GodTextCookingDark({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 20 * scale,
-            marginTop: 6 * scale,
+            gap: 20 * s,
+            marginTop: 6 * s,
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+            }}
+          >
             <span
               className="dm"
-              style={{ fontSize: 13 * scale, fontWeight: 700, color: "#fff" }}
+              style={{ fontSize: 13 * s, fontWeight: 700, color: "#fff" }}
             >
               Analyze
             </span>
             <div
               style={{
                 width: "100%",
-                height: 2.5 * scale,
+                height: 2.5 * s,
                 background: "#FF4400",
                 borderRadius: 99,
-                marginTop: 2 * scale,
+                marginTop: 2 * s,
               }}
             />
           </div>
           <span
             className="dm"
-            style={{ fontSize: 13 * scale, fontWeight: 500, color: "rgba(255,255,255,0.25)" }}
+            style={{
+              fontSize: 13 * s,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.25)",
+            }}
           >
             Rizz Vault
           </span>
           <span
             className="dm"
-            style={{ fontSize: 13 * scale, fontWeight: 500, color: "rgba(255,255,255,0.25)" }}
+            style={{
+              fontSize: 13 * s,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.25)",
+            }}
           >
             Profile
           </span>
@@ -173,13 +196,20 @@ export default function GodTextCookingDark({
 
       <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
 
-      {/* Main Content Area */}
-      <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
+      {/* ═══ SAFE ZONE (524px) ═══ */}
+      <div
+        style={{
+          flex: 1,
+          position: "relative",
+          overflow: "hidden",
+          maxHeight: 524 * s,
+        }}
+      >
         <div
           style={{
             position: "absolute",
             inset: 0,
-            padding: `${20 * scale}px`,
+            padding: `${16 * s}px ${20 * s}px`,
             overflowY: "auto",
             filter: phase === "cooking" ? "blur(10px)" : "none",
             opacity: phase === "cooking" ? 0.35 : 1,
@@ -187,9 +217,9 @@ export default function GodTextCookingDark({
           }}
         >
           {phase === "cooking" ? (
-            <DarkCookingBackground scale={scale} />
+            <DarkCookingBackground scale={s} />
           ) : (
-            <DarkRevealContent scale={scale} showResults={showResults} />
+            <DarkRevealContent scale={s} showResults={showResults} />
           )}
         </div>
 
@@ -207,23 +237,24 @@ export default function GodTextCookingDark({
           >
             <div
               style={{
-                borderRadius: 16 * scale,
-                padding: `${32 * scale}px ${40 * scale}px`,
+                borderRadius: 16 * s,
+                padding: `${32 * s}px ${40 * s}px`,
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                gap: 16 * scale,
-                margin: `0 ${32 * scale}px`,
+                gap: 16 * s,
+                margin: `0 ${32 * s}px`,
                 background: "rgba(18,18,22,0.95)",
                 border: "1px solid rgba(255,68,0,0.12)",
                 backdropFilter: "blur(20px)",
-                animation: "gt-fadeIn 0.3s ease forwards, gt-glowPulse 3s ease-in-out infinite",
+                animation:
+                  "gt-fadeIn 0.3s ease forwards, gt-glowPulse 3s ease-in-out infinite",
               }}
             >
               <div
                 style={{
-                  width: 56 * scale,
-                  height: 56 * scale,
+                  width: 56 * s,
+                  height: 56 * s,
                   borderRadius: "50%",
                   display: "flex",
                   alignItems: "center",
@@ -231,14 +262,14 @@ export default function GodTextCookingDark({
                   background: "rgba(255,68,0,0.1)",
                 }}
               >
-                <DarkLoadingIcon icon={currentLoading.icon} scale={scale} />
+                <DarkLoadingIcon icon={currentLoading.icon} scale={s} />
               </div>
               <div style={{ textAlign: "center" }}>
                 <p
                   className="dm"
                   key={loadingStep}
                   style={{
-                    fontSize: 18 * scale,
+                    fontSize: 18 * s,
                     fontWeight: 700,
                     color: "#fff",
                     margin: 0,
@@ -250,9 +281,9 @@ export default function GodTextCookingDark({
                 <p
                   className="dm"
                   style={{
-                    fontSize: 14 * scale,
+                    fontSize: 14 * s,
                     color: "rgba(255,255,255,0.3)",
-                    marginTop: 4 * scale,
+                    marginTop: 4 * s,
                     marginBottom: 0,
                   }}
                 >
@@ -264,19 +295,27 @@ export default function GodTextCookingDark({
         )}
       </div>
 
-      {/* Bottom Tab Bar */}
+      {/* ═══ BOTTOM DEAD ZONE (170px) ═══ */}
       <div
         style={{
+          minHeight: 170 * s,
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-around",
-          padding: `${12 * scale}px 0 ${24 * scale}px`,
-          borderTop: "1px solid rgba(255,255,255,0.06)",
+          flexDirection: "column",
         }}
       >
-        <DarkTabBarItem label="Analyze" active scale={scale} />
-        <DarkTabBarItem label="Vault" scale={scale} />
-        <DarkTabBarItem label="Profile" scale={scale} />
+        <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-around",
+            paddingTop: 12 * s,
+          }}
+        >
+          <DarkTabBarItem label="Analyze" active scale={s} />
+          <DarkTabBarItem label="Vault" scale={s} />
+          <DarkTabBarItem label="Profile" scale={s} />
+        </div>
       </div>
     </div>
   );
@@ -300,14 +339,30 @@ function DarkLoadingIcon({
         fill="none"
         style={{ animation: "gt-spin 1s linear infinite" }}
       >
-        <circle cx="14" cy="14" r="11" stroke="rgba(255,68,0,0.12)" strokeWidth="3" />
-        <path d="M14 3a11 11 0 019.5 5.5" stroke="#FF4400" strokeWidth="3" strokeLinecap="round" />
+        <circle
+          cx="14"
+          cy="14"
+          r="11"
+          stroke="rgba(255,68,0,0.12)"
+          strokeWidth="3"
+        />
+        <path
+          d="M14 3a11 11 0 019.5 5.5"
+          stroke="#FF4400"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
       </svg>
     );
   }
   if (icon === "brain") {
     return (
-      <svg width={26 * scale} height={26 * scale} viewBox="0 0 24 24" fill="none">
+      <svg
+        width={26 * scale}
+        height={26 * scale}
+        viewBox="0 0 24 24"
+        fill="none"
+      >
         <path
           d="M12 2C9 2 7 4 7 6.5C5.5 7 4 8.5 4 10.5C4 12 5 13.5 6 14C6 16 7.5 18 10 18.5V22H14V18.5C16.5 18 18 16 18 14C19 13.5 20 12 20 10.5C20 8.5 18.5 7 17 6.5C17 4 15 2 12 2Z"
           stroke="#FF4400"
@@ -315,27 +370,50 @@ function DarkLoadingIcon({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path d="M12 2V18.5" stroke="#FF4400" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M7 10.5H17" stroke="#FF4400" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M8.5 14H15.5" stroke="#FF4400" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M12 2V18.5"
+          stroke="#FF4400"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
+        <path
+          d="M7 10.5H17"
+          stroke="#FF4400"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M8.5 14H15.5"
+          stroke="#FF4400"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     );
   }
   return (
-    <svg width={24 * scale} height={24 * scale} viewBox="0 0 24 24" fill="#FF4400">
+    <svg
+      width={24 * scale}
+      height={24 * scale}
+      viewBox="0 0 24 24"
+      fill="#FF4400"
+    >
       <path d="M12 0L14.4 9.6L24 12L14.4 14.4L12 24L9.6 14.4L0 12L9.6 9.6Z" />
     </svg>
   );
 }
 
 function DarkCookingBackground({ scale }: { scale: number }) {
+  const s = scale;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 * scale }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", gap: 12 * s }}
+    >
       <div>
         <h2
           className="syne"
           style={{
-            fontSize: 26 * scale,
+            fontSize: 24 * s,
             fontWeight: 800,
             color: "#fff",
             lineHeight: 1.15,
@@ -349,9 +427,9 @@ function DarkCookingBackground({ scale }: { scale: number }) {
         <p
           className="dm"
           style={{
-            fontSize: 14 * scale,
+            fontSize: 13 * s,
             color: "rgba(255,255,255,0.3)",
-            marginTop: 4 * scale,
+            marginTop: 4 * s,
             marginBottom: 0,
           }}
         >
@@ -363,21 +441,21 @@ function DarkCookingBackground({ scale }: { scale: number }) {
         title="Upload Screenshot"
         desc="Drop your convo and get instant AI reply suggestions"
         bg="linear-gradient(135deg, #FF4400, #E03000)"
-        scale={scale}
+        scale={s}
       />
       <DarkMethodCard
         emoji="🎙️"
         title="Voice Mode"
         desc="Talk it out with AI"
         bg="linear-gradient(135deg, #2A2A5A, #3B44B0)"
-        scale={scale}
+        scale={s}
       />
       <DarkMethodCard
         emoji="💜"
         title="Dating Profile Scanner"
         desc="Analyze their profile & vibe"
         bg="linear-gradient(135deg, #7B2FA0, #C563E0)"
-        scale={scale}
+        scale={s}
       />
     </div>
   );
@@ -397,15 +475,21 @@ function DarkMethodCard({
   scale: number;
 }) {
   return (
-    <div style={{ borderRadius: 16 * scale, padding: `${20 * scale}px`, background: bg }}>
-      <span style={{ fontSize: 22 * scale }}>{emoji}</span>
+    <div
+      style={{
+        borderRadius: 16 * scale,
+        padding: `${16 * scale}px ${20 * scale}px`,
+        background: bg,
+      }}
+    >
+      <span style={{ fontSize: 20 * scale }}>{emoji}</span>
       <p
         className="dm"
         style={{
-          fontSize: 17 * scale,
+          fontSize: 16 * scale,
           fontWeight: 700,
           color: "#fff",
-          marginTop: 8 * scale,
+          marginTop: 6 * scale,
           marginBottom: 0,
         }}
       >
@@ -414,7 +498,7 @@ function DarkMethodCard({
       <p
         className="dm"
         style={{
-          fontSize: 13 * scale,
+          fontSize: 12 * scale,
           color: "rgba(255,255,255,0.5)",
           marginTop: 2 * scale,
           marginBottom: 0,
@@ -433,6 +517,7 @@ function DarkRevealContent({
   scale: number;
   showResults: boolean;
 }) {
+  const s = scale;
   const anim = (delay: number) =>
     showResults ? `gt-staggerIn 0.5s ease ${delay}s both` : "none";
 
@@ -441,42 +526,42 @@ function DarkRevealContent({
       style={{
         display: "flex",
         flexDirection: "column",
-        gap: 16 * scale,
+        gap: 12 * s,
         animation: showResults ? "gt-fadeIn 0.4s ease forwards" : "none",
       }}
     >
       {/* Strategic Tip */}
       <div
         style={{
-          borderRadius: 16 * scale,
-          padding: `${16 * scale}px ${20 * scale}px`,
+          borderRadius: 16 * s,
+          padding: `${14 * s}px ${16 * s}px`,
           display: "flex",
           alignItems: "flex-start",
-          gap: 12 * scale,
+          gap: 12 * s,
           background: "linear-gradient(135deg, #2A2A5A, #3B44B0)",
           animation: anim(0),
         }}
       >
         <div
           style={{
-            width: 40 * scale,
-            height: 40 * scale,
+            width: 36 * s,
+            height: 36 * s,
             borderRadius: "50%",
             background: "rgba(255,255,255,0.1)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexShrink: 0,
-            marginTop: 2 * scale,
+            marginTop: 2 * s,
           }}
         >
-          <span style={{ fontSize: 16 * scale }}>💡</span>
+          <span style={{ fontSize: 15 * s }}>💡</span>
         </div>
         <div>
           <p
             className="dm"
             style={{
-              fontSize: 10 * scale,
+              fontSize: 10 * s,
               fontWeight: 700,
               color: "rgba(255,255,255,0.4)",
               letterSpacing: "0.18em",
@@ -489,10 +574,10 @@ function DarkRevealContent({
           <p
             className="dm"
             style={{
-              fontSize: 14 * scale,
+              fontSize: 13 * s,
               color: "rgba(255,255,255,0.85)",
               lineHeight: 1.5,
-              marginTop: 4 * scale,
+              marginTop: 4 * s,
               marginBottom: 0,
             }}
           >
@@ -507,12 +592,18 @@ function DarkRevealContent({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          animation: anim(0.2),
+          marginTop: 4 * s,
+          animation: anim(0.15),
         }}
       >
         <h3
           className="syne"
-          style={{ fontSize: 22 * scale, fontWeight: 800, color: "#fff", margin: 0 }}
+          style={{
+            fontSize: 20 * s,
+            fontWeight: 800,
+            color: "#fff",
+            margin: 0,
+          }}
         >
           Suggested Replies
         </h3>
@@ -520,58 +611,82 @@ function DarkRevealContent({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 6 * scale,
-            padding: `${6 * scale}px ${12 * scale}px`,
+            gap: 6 * s,
+            padding: `${6 * s}px ${12 * s}px`,
             borderRadius: 99,
             background: "#FF4400",
           }}
         >
-          <span style={{ fontSize: 11 * scale }}>💡</span>
+          <span style={{ fontSize: 10 * s }}>💡</span>
           <span
             className="dm"
-            style={{ fontSize: 12 * scale, fontWeight: 700, color: "#fff" }}
+            style={{ fontSize: 11 * s, fontWeight: 700, color: "#fff" }}
           >
             New
           </span>
         </div>
       </div>
 
-      {/* Reply 1 */}
+      {/* Reply 1 — Recommended */}
       <DarkReplyCard
         tags={[
-          { label: "Confident/Brief", color: "#FF6633", bg: "rgba(255,68,0,0.12)" },
-          { label: "⚡ Recommended", color: "#FF6633", bg: "rgba(255,68,0,0.08)" },
+          {
+            label: "Confident/Brief",
+            color: "#FF6633",
+            bg: "rgba(255,68,0,0.12)",
+          },
+          {
+            label: "⚡ Recommended",
+            color: "#FF6633",
+            bg: "rgba(255,68,0,0.08)",
+          },
         ]}
-        text="Lol I get it, I probably came off wrong. That stuff doesn't bother me at all though, fr."
+        text="Lol I get it, I probably came off wrong. That stuff doesn’t bother me at all though, fr."
         tip="💡 Owns it lightly without over-apologizing, feels genuine."
         highlighted
-        scale={scale}
-        anim={anim(0.3)}
+        scale={s}
+        anim={anim(0.25)}
       />
+
+      {/* Reply 2 — Playful */}
       <DarkReplyCard
-        tags={[{ label: "Playful/Teasing", color: "#66BB6A", bg: "rgba(76,175,80,0.12)" }]}
-        text="Damn I'm already in trouble and we just met 😂"
+        tags={[
+          {
+            label: "Playful/Teasing",
+            color: "#66BB6A",
+            bg: "rgba(76,175,80,0.12)",
+          },
+        ]}
+        text="Damn I’m already in trouble and we just met 😂"
         tip="💡 Breaks tension with humor, self-aware without groveling."
-        scale={scale}
-        anim={anim(0.4)}
+        scale={s}
+        anim={anim(0.35)}
       />
+
+      {/* Reply 3 — Direct/Bold */}
       <DarkReplyCard
-        tags={[{ label: "Direct/Bold", color: "#B388FF", bg: "rgba(156,100,220,0.12)" }]}
-        text="Honestly that's one of the things I'd actually respect — someone who actually shows up for the people in their life."
+        tags={[
+          {
+            label: "Direct/Bold",
+            color: "#B388FF",
+            bg: "rgba(156,100,220,0.12)",
+          },
+        ]}
+        text="Honestly that’s one of the things I’d actually respect — someone who actually shows up for the people in their life."
         tip="💡 Reframes her value positively, cuts through the awkwardness."
-        scale={scale}
-        anim={anim(0.5)}
+        scale={s}
+        anim={anim(0.45)}
       />
 
       {/* Rizz Momentum Index */}
       <div
         style={{
-          borderRadius: 16 * scale,
-          padding: `${20 * scale}px`,
+          borderRadius: 16 * s,
+          padding: `${16 * s}px`,
           background: "linear-gradient(135deg, #0A0A20, #12122A)",
           border: "1px solid rgba(51,102,255,0.12)",
-          marginBottom: 16 * scale,
-          animation: anim(0.7),
+          marginBottom: 8 * s,
+          animation: anim(0.55),
         }}
       >
         <div
@@ -579,13 +694,13 @@ function DarkRevealContent({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: 12 * scale,
+            marginBottom: 8 * s,
           }}
         >
           <p
             className="dm"
             style={{
-              fontSize: 10 * scale,
+              fontSize: 10 * s,
               fontWeight: 700,
               color: "rgba(255,255,255,0.35)",
               letterSpacing: "0.18em",
@@ -595,38 +710,73 @@ function DarkRevealContent({
           >
             Rizz Momentum Index™
           </p>
+          <div
+            style={{
+              width: 16 * s,
+              height: 16 * s,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 8 * s,
+                color: "rgba(255,255,255,0.25)",
+              }}
+            >
+              i
+            </span>
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8 * scale }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 8 * s,
+          }}
+        >
           <span
             className="syne"
-            style={{ fontSize: 48 * scale, fontWeight: 800, color: "#3366FF", lineHeight: 1 }}
+            style={{
+              fontSize: 42 * s,
+              fontWeight: 800,
+              color: "#3366FF",
+              lineHeight: 1,
+            }}
           >
             52
           </span>
           <span
             className="dm"
-            style={{ fontSize: 20 * scale, fontWeight: 700, color: "rgba(255,255,255,0.4)" }}
+            style={{
+              fontSize: 18 * s,
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.4)",
+            }}
           >
             %
           </span>
           <span
             className="dm"
             style={{
-              fontSize: 17 * scale,
+              fontSize: 16 * s,
               fontStyle: "italic",
               color: "#FF4400",
               fontWeight: 500,
-              marginLeft: 4 * scale,
+              marginLeft: 4 * s,
             }}
           >
             Solid Vibes
           </span>
-          <span style={{ fontSize: 18 * scale, marginLeft: 2 * scale }}>😎</span>
+          <span style={{ fontSize: 16 * s, marginLeft: 2 * s }}>😎</span>
         </div>
         <div
           style={{
-            marginTop: 12 * scale,
-            height: 8 * scale,
+            marginTop: 10 * s,
+            height: 6 * s,
             borderRadius: 99,
             overflow: "hidden",
             background: "rgba(255,255,255,0.06)",
@@ -665,8 +815,10 @@ function DarkReplyCard({
     <div
       style={{
         borderRadius: 16 * scale,
-        padding: `${16 * scale}px ${20 * scale}px`,
-        background: highlighted ? "rgba(255,68,0,0.06)" : "rgba(255,255,255,0.03)",
+        padding: `${14 * scale}px ${16 * scale}px`,
+        background: highlighted
+          ? "rgba(255,68,0,0.06)"
+          : "rgba(255,255,255,0.03)",
         border: highlighted
           ? "1.5px solid rgba(255,68,0,0.18)"
           : "1px solid rgba(255,255,255,0.07)",
@@ -678,7 +830,7 @@ function DarkReplyCard({
           display: "flex",
           alignItems: "center",
           gap: 8 * scale,
-          marginBottom: 10 * scale,
+          marginBottom: 8 * scale,
         }}
       >
         {tags.map((t) => (
@@ -686,9 +838,9 @@ function DarkReplyCard({
             key={t.label}
             className="dm"
             style={{
-              fontSize: 11 * scale,
+              fontSize: 10 * scale,
               fontWeight: 700,
-              padding: `${4 * scale}px ${10 * scale}px`,
+              padding: `${2 * scale}px ${8 * scale}px`,
               borderRadius: 99,
               background: t.bg,
               color: t.color,
@@ -701,7 +853,7 @@ function DarkReplyCard({
       <p
         className="dm"
         style={{
-          fontSize: 16 * scale,
+          fontSize: 15 * scale,
           fontWeight: 700,
           color: "rgba(255,255,255,0.9)",
           lineHeight: 1.35,
@@ -713,10 +865,10 @@ function DarkReplyCard({
       <p
         className="dm"
         style={{
-          fontSize: 13 * scale,
+          fontSize: 12 * scale,
           fontStyle: "italic",
           color: "rgba(255,255,255,0.3)",
-          marginTop: 8 * scale,
+          marginTop: 6 * scale,
           marginBottom: 0,
           lineHeight: 1.5,
         }}

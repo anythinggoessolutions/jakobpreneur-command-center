@@ -51,82 +51,37 @@ export const TIMEZONE = "America/New_York";
 // Caption generator
 // ---------------------------------------------------------------------------
 
-const HOOKS = [
-  "this app is literally a cheat code for texting girls 💀",
-  "godtext ai just cooked the perfect response",
-  "she wasn't ready for this level of rizz",
-  "watch godtext turn a dead convo into a date 🔥",
-  "this is why guys are downloading godtext ai rn",
-  "godtext ai said 'i got you bro' and delivered",
-  "he let the ai cook and she gave her number 😭",
-  "proof that godtext ai is the best wingman ever",
-  "bro used godtext and she's already planning the date",
-  "godtext ai turned this conversation around instantly",
-  "this is the texting app every guy needs fr",
-  "she thought he was smooth but it was godtext 💀",
-  "godtext ai: because why guess what to text?",
-  "watch how fast godtext ai closes this convo",
-  "downloaded godtext ai and never looked back",
-];
-
-const CTAS = [
-  "Download GodText AI — link in bio 🔗",
-  "Get GodText AI in the App Store now 📲",
-  "Link in bio to download GodText AI 🔥",
-  "GodText AI — download free, link in bio",
-  "Stop guessing. Download GodText AI today 📲",
-  "Get the app → link in bio",
-  "Download GodText AI and never miss again 🎯",
-  "GodText AI is free to download — link in bio",
-];
-
-const HASHTAGS = [
-  "#godtextai",
-  "#rizz",
-  "#texting",
-  "#dating",
-  "#textgame",
-  "#datingadvice",
-  "#datingtips",
-  "#rizzgod",
-  "#textingadvice",
-  "#howtotext",
-  "#datingapp",
-  "#textingtips",
-  "#pickuplines",
-  "#flirting",
-  "#relationships",
-  "#fyp",
-  "#viral",
-  "#ai",
-  "#aiapp",
+const FALLBACK_CAPTIONS = [
+  "This type of rizz needs to be studied fr 😭",
+  "She was NOT ready for that last text 💀",
+  "Bro turned a dead convo into a whole date 🔥",
+  "The way she just handed over her number 😭",
+  "Nah this is actually insane rizz",
+  "She went from dry texts to dropping digits 😮‍💨",
+  "This convo went from 0 to 100 real quick 🔥",
+  "He really said the perfect thing every time 💀",
+  "She folded after that one text 😭",
+  "This is what peak texting looks like fr",
 ];
 
 function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function pickN<T>(arr: readonly T[], n: number): T[] {
-  const shuffled = [...arr].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, n);
-}
-
 /**
  * Generate a caption for a GodText AI video post.
- * Includes a hook line, CTA, and hashtags.
+ *
+ * Format:
+ *   <caption relatable to the video>
+ *   @godtextai
+ *   #viral #pickupline #rizz #fyp
+ *
+ * If hookText is provided (from the script), it's used as the caption.
+ * Otherwise a random fallback caption is picked.
  */
-export function generateCaption(): string {
-  const hook = pick(HOOKS);
-  const cta = pick(CTAS);
-  const tags = [
-    "#godtextai", // always first
-    ...pickN(
-      HASHTAGS.filter((t) => t !== "#godtextai"),
-      8,
-    ),
-  ].join(" ");
-
-  return `${hook}\n\n${cta}\n\n${tags}`;
+export function generateCaption(hookText?: string): string {
+  const caption = hookText || pick(FALLBACK_CAPTIONS);
+  return `${caption} @godtextai\n#viral #pickupline #rizz #fyp`;
 }
 
 // ---------------------------------------------------------------------------

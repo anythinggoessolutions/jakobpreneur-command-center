@@ -112,6 +112,23 @@ export default function RenderFrame() {
     return <BaddieOverlay introText={params.get("intro") || ""} />;
   }
 
+  if (type === "thirst-trap") {
+    const headline = params.get("headline") || "";
+    const subtext = params.get("subtext") || "";
+    const slideType = (params.get("slideType") || "tip") as
+      | "hook"
+      | "tip"
+      | "twist"
+      | "cta";
+    return (
+      <ThirstTrapSlide
+        headline={headline}
+        subtext={subtext}
+        slideType={slideType}
+      />
+    );
+  }
+
   if (type === "reply") {
     const replyText = params.get("reply") || "";
     const theme = params.get("theme") || "dark";
@@ -561,7 +578,7 @@ function HookOverlay({ hookText }: { hookText: string }) {
           <span style={{ color: "#FF4400" }}>AI</span>
         </div>
 
-        <p
+        <div
           style={{
             fontFamily: "'DM Sans', system-ui, sans-serif",
             fontSize: 52,
@@ -574,8 +591,18 @@ function HookOverlay({ hookText }: { hookText: string }) {
             textShadow: "0 2px 16px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
           }}
         >
-          {hookText}
-        </p>
+          {hookText.split("\n").map((line, i) => (
+            <p
+              key={i}
+              style={{
+                margin: 0,
+                marginTop: i > 0 ? 16 : 0,
+              }}
+            >
+              {line}
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -628,6 +655,149 @@ function BaddieOverlay({ introText }: { introText: string }) {
         >
           {introText}
         </p>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Thirst Trap slide — text overlay on green screen (baddie composited later)
+// ---------------------------------------------------------------------------
+
+function ThirstTrapSlide({
+  headline,
+  subtext,
+  slideType,
+}: {
+  headline: string;
+  subtext: string;
+  slideType: "hook" | "tip" | "twist" | "cta";
+}) {
+  const isCta = slideType === "cta";
+
+  return (
+    <div
+      style={{
+        width: FRAME_W,
+        height: FRAME_H,
+        background: "#00FF00",
+        position: "relative",
+        overflow: "hidden",
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+      `}</style>
+
+      <div
+        style={{
+          position: "absolute",
+          top: SAFE_TOP,
+          bottom: FRAME_H - SAFE_BOTTOM,
+          left: SAFE_LEFT + 20,
+          right: FRAME_W - SAFE_RIGHT + 20,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: isCta ? "center" : "flex-start",
+          justifyContent: "center",
+          gap: isCta ? 48 : 24,
+          zIndex: 1,
+        }}
+      >
+        {/* GodText AI branding on CTA slide */}
+        {isCta && (
+          <div
+            style={{
+              fontFamily: "'Syne', sans-serif",
+              fontSize: 56,
+              fontWeight: 800,
+              color: "#fff",
+              letterSpacing: "-0.02em",
+              textShadow:
+                "0 2px 20px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+            }}
+          >
+            GodText <span style={{ color: "#FF4400" }}>AI</span>
+          </div>
+        )}
+
+        {/* Headline */}
+        <p
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: isCta ? 44 : 56,
+            fontWeight: 800,
+            color: "#fff",
+            lineHeight: 1.15,
+            margin: 0,
+            textAlign: isCta ? "center" : "left",
+            textShadow:
+              "0 3px 20px rgba(0,0,0,0.85), 0 1px 6px rgba(0,0,0,0.9)",
+            maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
+          }}
+        >
+          {headline}
+        </p>
+
+        {/* Subtext */}
+        {subtext && (
+          <p
+            style={{
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontSize: isCta ? 32 : 36,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.85)",
+              lineHeight: 1.35,
+              margin: 0,
+              textAlign: isCta ? "center" : "left",
+              textShadow:
+                "0 2px 12px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
+              maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
+            }}
+          >
+            {subtext}
+          </p>
+        )}
+
+        {/* CTA button */}
+        {isCta && (
+          <div
+            style={{
+              padding: "20px 48px",
+              borderRadius: 20,
+              background: "#FF4400",
+              color: "#fff",
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontSize: 28,
+              fontWeight: 700,
+              textShadow: "none",
+              letterSpacing: "0.02em",
+            }}
+          >
+            Download free — link in bio
+          </div>
+        )}
+
+        {/* Slide number indicator (non-CTA) */}
+        {!isCta && slideType !== "hook" && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontSize: 20,
+              fontWeight: 700,
+              color: "rgba(255,255,255,0.5)",
+              textShadow:
+                "0 1px 8px rgba(0,0,0,0.8)",
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+            }}
+          >
+            {slideType === "twist" ? "But here's the thing..." : "Swipe →"}
+          </div>
+        )}
       </div>
     </div>
   );

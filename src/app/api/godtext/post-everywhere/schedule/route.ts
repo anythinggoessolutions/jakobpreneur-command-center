@@ -29,11 +29,12 @@ export const maxDuration = 120;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { videoUrl, scheduledFor, caption, youtubeTitle } = body as {
+    const { videoUrl, scheduledFor, caption, youtubeTitle, hookText } = body as {
       videoUrl?: string;
       scheduledFor?: string;
       caption?: string;
       youtubeTitle?: string;
+      hookText?: string;
     };
 
     if (!videoUrl) {
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     const mediaId = await uploadVideo(videoUrl);
 
     // 2. Generate caption and YT title if not provided
-    const finalCaption = caption || generateCaption();
+    const finalCaption = caption || generateCaption(hookText);
     const finalYtTitle = youtubeTitle || generateYoutubeTitle();
 
     // 3. Schedule the post

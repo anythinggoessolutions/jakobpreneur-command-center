@@ -42,6 +42,11 @@ export default function GodTextAIPage() {
     videoUrl?: string;
   } | null>(null);
   const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
+  const [buildFormat, setBuildFormat] = useState<"video" | "carousel">("video");
+  const [carouselResult, setCarouselResult] = useState<{
+    slideUrls: string[];
+    warnings: string[];
+  } | null>(null);
   const [cookingPreview, setCookingPreview] = useState<"off" | "white-cooking" | "white-reveal" | "dark-cooking" | "dark-reveal">("off");
   const [savedScripts, setSavedScripts] = useState<
     { id: string; name: string; platform: string; hookText: string; conversation: GeneratedConversation | null; createdTime: string }[]
@@ -172,30 +177,48 @@ export default function GodTextAIPage() {
     setAssembling(true);
     setAssembleError(null);
     setVideoResult(null);
+    setCarouselResult(null);
     try {
-      // Video building needs Playwright + ffmpeg which only run on the local Mac.
-      // The production site (jakobprenuer.com) calls localhost:3000 for this.
-      // If already on localhost, use a relative path.
       const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      const buildUrl = isLocal
-        ? "/api/godtext/videos/build"
-        : "http://localhost:3000/api/godtext/videos/build";
 
-      const res = await fetch(buildUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversation, theme: videoTheme }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (buildFormat === "carousel") {
+        const buildUrl = isLocal
+          ? "/api/godtext/carousels/build"
+          : "http://localhost:3000/api/godtext/carousels/build";
 
-      setVideoResult({
-        outputPath: "",
-        durationSeconds: 0,
-        frameCount: 0,
-        warnings: data.warnings || [],
-        videoUrl: data.videoUrl,
-      });
+        const res = await fetch(buildUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation, theme: videoTheme }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+        setCarouselResult({
+          slideUrls: data.slideUrls || [],
+          warnings: data.warnings || [],
+        });
+      } else {
+        const buildUrl = isLocal
+          ? "/api/godtext/videos/build"
+          : "http://localhost:3000/api/godtext/videos/build";
+
+        const res = await fetch(buildUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation, theme: videoTheme }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+        setVideoResult({
+          outputPath: "",
+          durationSeconds: 0,
+          frameCount: 0,
+          warnings: data.warnings || [],
+          videoUrl: data.videoUrl,
+        });
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
@@ -601,13 +624,30 @@ export default function GodTextAIPage() {
           <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-4">
             <div className="flex items-start justify-between mb-3">
               <div>
-                <h2 className="text-sm font-bold text-zinc-900">Build Video</h2>
+                <h2 className="text-sm font-bold text-zinc-900">
+                  Build {buildFormat === "carousel" ? "Carousel" : "Video"}
+                </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  Assemble a 1080x1920 MP4 from the selected script. Queues the
-                  job — your Mac builds it and uploads the finished video.
+                  {buildFormat === "carousel"
+                    ? "Generate carousel slides from the selected script. Posts to TikTok + Instagram."
+                    : "Assemble a 1080x1920 MP4 from the selected script. Posts to all platforms."}
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <select
+                  value={buildFormat}
+                  onChange={(e) => {
+                    setBuildFormat(e.target.value as "video" | "carousel");
+                    setVideoResult(null);
+                    setCarouselResult(null);
+                    setAssembleError(null);
+                  }}
+                  disabled={assembling}
+                  className="rounded border border-zinc-200 bg-white text-xs px-2 py-2 disabled:opacity-40"
+                >
+                  <option value="video">Video</option>
+                  <option value="carousel">Carousel</option>
+                </select>
                 <select
                   value={videoTheme}
                   onChange={(e) => setVideoTheme(e.target.value as "dark" | "white")}
@@ -622,21 +662,167 @@ export default function GodTextAIPage() {
                   disabled={assembling}
                   className="bg-gradient-to-r from-orange-600 to-red-600 text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-40 cursor-pointer whitespace-nowrap"
                 >
-                  {assembling ? "Building…" : "Build Video"}
+                  {assembling
+                    ? "Building…"
+                    : buildFormat === "carousel"
+                      ? "Build Carousel"
+                      : "Build Video"}
                 </button>
               </div>
             </div>
 
             {assembling && (
               <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
-                Building video — screenshotting frames, encoding MP4, uploading.
-                This takes 1-2 minutes. Don&apos;t close this tab.
+                {buildFormat === "carousel"
+                  ? "Building carousel — screenshotting slides, uploading images. This takes 1-2 minutes. Don’t close this tab."
+                  : "Building video — screenshotting frames, encoding MP4, uploading. This takes 1-2 minutes. Don’t close this tab."}
               </div>
             )}
 
             {assembleError && (
               <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
                 {assembleError}
+              </div>
+            )}
+
+            {carouselResult && (
+              <div className="text-xs bg-green-50 border border-green-200 rounded px-3 py-3">
+                <div className="font-semibold text-green-800 mb-2">
+                  Carousel ready! {carouselResult.slideUrls.length} slides
+                </div>
+
+                {carouselResult.warnings.length > 0 && (
+                  <div className="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                    {carouselResult.warnings.map((w, i) => (
+                      <div key={i}>{w}</div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Slide preview — horizontal scroll */}
+                <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+                  {carouselResult.slideUrls.map((url, i) => (
+                    <div key={i} className="shrink-0 relative">
+                      <img
+                        src={url}
+                        alt={`Slide ${i + 1}`}
+                        className="h-48 w-auto rounded-lg border border-zinc-200"
+                      />
+                      <span className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                        {i + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={scheduleDate}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      setScheduleDate(newDate);
+                      const slots = ["07:00", "11:30", "14:30", "18:00", "21:00"];
+                      const firstOpen = slots.find((s) => !bookedSlots[`${newDate}|${s}`]);
+                      if (firstOpen) setScheduleSlot(firstOpen);
+                    }}
+                    disabled={scheduling}
+                    className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+                  >
+                    {Array.from({ length: 14 }, (_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + i);
+                      const val = d.toISOString().split("T")[0];
+                      const label = d.toLocaleDateString("en-US", {
+                        weekday: "short",
+                        month: "short",
+                        day: "numeric",
+                      });
+                      const slotsTotal = 5;
+                      const slotsBooked = ["07:00", "11:30", "14:30", "18:00", "21:00"]
+                        .filter((s) => bookedSlots[`${val}|${s}`]).length;
+                      const slotsOpen = slotsTotal - slotsBooked;
+                      return (
+                        <option key={val} value={val}>
+                          {label}{slotsBooked > 0 ? ` (${slotsOpen}/${slotsTotal} open)` : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <select
+                    value={scheduleSlot}
+                    onChange={(e) => setScheduleSlot(e.target.value)}
+                    disabled={scheduling}
+                    className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+                  >
+                    {[
+                      { value: "07:00", label: "7:00 AM — Early morning" },
+                      { value: "11:30", label: "11:30 AM — Lunch break" },
+                      { value: "14:30", label: "2:30 PM — Afternoon peak" },
+                      { value: "18:00", label: "6:00 PM — Post-work" },
+                      { value: "21:00", label: "9:00 PM — Night scroll" },
+                    ].map((slot) => {
+                      const isBooked = bookedSlots[`${scheduleDate}|${slot.value}`];
+                      return (
+                        <option
+                          key={slot.value}
+                          value={slot.value}
+                          disabled={isBooked}
+                        >
+                          {slot.label}{isBooked ? " ✓ BOOKED" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      if (!carouselResult?.slideUrls.length) return;
+                      setScheduling(true);
+                      setScheduleError(null);
+                      setScheduleResult(null);
+                      try {
+                        const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
+                        const res = await fetch("/api/godtext/carousels/schedule", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            slideUrls: carouselResult.slideUrls,
+                            scheduledFor,
+                            hookText: conversation?.hookText,
+                          }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+                        setScheduleResult({
+                          postId: data.postId,
+                          status: data.status,
+                          scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+                        });
+                        fetchBookedSlots();
+                      } catch (err) {
+                        setScheduleError(err instanceof Error ? err.message : String(err));
+                      } finally {
+                        setScheduling(false);
+                      }
+                    }}
+                    disabled={scheduling}
+                    className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                  >
+                    {scheduling ? "Scheduling…" : "Schedule to TikTok + Instagram"}
+                  </button>
+                </div>
+
+                {scheduleError && (
+                  <div className="mt-2 text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+                    {scheduleError}
+                  </div>
+                )}
+
+                {scheduleResult && (
+                  <div className="mt-2 text-purple-800 bg-purple-50 border border-purple-200 rounded px-2 py-1.5">
+                    Scheduled! Post ID: <code className="bg-purple-100 px-1 rounded">{scheduleResult.postId}</code>
+                    {" "}— {scheduleResult.scheduledFor} (ET) to TikTok + Instagram
+                  </div>
+                )}
               </div>
             )}
 
@@ -754,10 +940,289 @@ export default function GodTextAIPage() {
           </section>
         )}
 
+        {/* --- Section 3.9: Thirst Trap Carousel --- */}
+        <ThirstTrapSection
+          bookedSlots={bookedSlots}
+          fetchBookedSlots={fetchBookedSlots}
+        />
+
         {/* --- Section 4: Content Calendar --- */}
         <ScheduledPostsFeed />
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Thirst Trap Carousel — standalone section with its own generate + build
+// ---------------------------------------------------------------------------
+
+function ThirstTrapSection({
+  bookedSlots,
+  fetchBookedSlots,
+}: {
+  bookedSlots: Record<string, boolean>;
+  fetchBookedSlots: () => Promise<void>;
+}) {
+  const [building, setBuilding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{
+    slideUrls: string[];
+    topic: string;
+  } | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<{
+    postId: string;
+    status: string;
+    scheduledFor: string;
+  } | null>(null);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split("T")[0];
+  });
+  const [scheduleSlot, setScheduleSlot] = useState("07:00");
+
+  const SLOT_LABELS: Record<string, string> = {
+    "07:00": "7:00 AM — Early morning",
+    "11:30": "11:30 AM — Lunch break",
+    "14:30": "2:30 PM — Afternoon peak",
+    "18:00": "6:00 PM — Post-work",
+    "21:00": "9:00 PM — Night scroll",
+  };
+
+  const runBuild = async () => {
+    setBuilding(true);
+    setError(null);
+    setResult(null);
+    setScheduleResult(null);
+    try {
+      const isLocal =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+      const buildUrl = isLocal
+        ? "/api/godtext/carousels/thirst-trap"
+        : "http://localhost:3000/api/godtext/carousels/thirst-trap";
+
+      const res = await fetch(buildUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      setResult({
+        slideUrls: data.slideUrls || [],
+        topic: data.topic || "",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        setError(
+          "Can't reach your Mac. Make sure it's on and the Command Center Server is running.",
+        );
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setBuilding(false);
+    }
+  };
+
+  const runSchedule = async () => {
+    if (!result?.slideUrls.length) return;
+    setScheduling(true);
+    setScheduleError(null);
+    setScheduleResult(null);
+    try {
+      const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
+      const res = await fetch("/api/godtext/carousels/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slideUrls: result.slideUrls,
+          scheduledFor,
+          hookText: result.topic,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setScheduleResult({
+        postId: data.postId,
+        status: data.status,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+      });
+      fetchBookedSlots();
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  return (
+    <section className="mb-6 rounded-xl border border-pink-200 bg-gradient-to-br from-pink-50/60 to-orange-50/40 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">
+            Thirst Trap Psychological Carousel
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            AI-generated carousel with baddie photos + psychology-driven
+            texting tips that keep them swiping. Posts to TikTok + Instagram.
+          </p>
+        </div>
+        <button
+          onClick={runBuild}
+          disabled={building}
+          className="bg-gradient-to-r from-pink-600 to-orange-500 text-white text-xs font-semibold px-4 py-2 rounded-lg disabled:opacity-40 cursor-pointer whitespace-nowrap"
+        >
+          {building ? "Generating…" : "Generate Thirst Trap Carousel"}
+        </button>
+      </div>
+
+      {building && (
+        <div className="mb-3 text-xs text-pink-700 bg-pink-50 border border-pink-200 rounded px-2 py-1.5">
+          Generating slide content with AI, downloading baddie photos,
+          rendering slides. This takes 1-2 minutes.
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="text-xs bg-green-50 border border-green-200 rounded px-3 py-3">
+          <div className="font-semibold text-green-800 mb-2">
+            Carousel ready! {result.slideUrls.length} slides —{" "}
+            &ldquo;{result.topic}&rdquo;
+          </div>
+
+          {/* Slide preview */}
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
+            {result.slideUrls.map((url, i) => (
+              <div key={i} className="shrink-0 relative">
+                <img
+                  src={url}
+                  alt={`Slide ${i + 1}`}
+                  className="h-48 w-auto rounded-lg border border-zinc-200"
+                />
+                <span className="absolute top-1 left-1 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                  {i + 1}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={scheduleDate}
+              onChange={(e) => {
+                const newDate = e.target.value;
+                setScheduleDate(newDate);
+                const slots = [
+                  "07:00",
+                  "11:30",
+                  "14:30",
+                  "18:00",
+                  "21:00",
+                ];
+                const firstOpen = slots.find(
+                  (s) => !bookedSlots[`${newDate}|${s}`],
+                );
+                if (firstOpen) setScheduleSlot(firstOpen);
+              }}
+              disabled={scheduling}
+              className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+            >
+              {Array.from({ length: 14 }, (_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() + i);
+                const val = d.toISOString().split("T")[0];
+                const label = d.toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                const slotsTotal = 5;
+                const slotsBooked = [
+                  "07:00",
+                  "11:30",
+                  "14:30",
+                  "18:00",
+                  "21:00",
+                ].filter((s) => bookedSlots[`${val}|${s}`]).length;
+                const slotsOpen = slotsTotal - slotsBooked;
+                return (
+                  <option key={val} value={val}>
+                    {label}
+                    {slotsBooked > 0
+                      ? ` (${slotsOpen}/${slotsTotal} open)`
+                      : ""}
+                  </option>
+                );
+              })}
+            </select>
+            <select
+              value={scheduleSlot}
+              onChange={(e) => setScheduleSlot(e.target.value)}
+              disabled={scheduling}
+              className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+            >
+              {[
+                { value: "07:00", label: "7:00 AM — Early morning" },
+                { value: "11:30", label: "11:30 AM — Lunch break" },
+                { value: "14:30", label: "2:30 PM — Afternoon peak" },
+                { value: "18:00", label: "6:00 PM — Post-work" },
+                { value: "21:00", label: "9:00 PM — Night scroll" },
+              ].map((slot) => {
+                const isBooked =
+                  bookedSlots[`${scheduleDate}|${slot.value}`];
+                return (
+                  <option
+                    key={slot.value}
+                    value={slot.value}
+                    disabled={isBooked}
+                  >
+                    {slot.label}
+                    {isBooked ? " ✓ BOOKED" : ""}
+                  </option>
+                );
+              })}
+            </select>
+            <button
+              onClick={runSchedule}
+              disabled={scheduling}
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-40 cursor-pointer whitespace-nowrap"
+            >
+              {scheduling
+                ? "Scheduling…"
+                : "Schedule to TikTok + Instagram"}
+            </button>
+          </div>
+
+          {scheduleError && (
+            <div className="mt-2 text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+              {scheduleError}
+            </div>
+          )}
+
+          {scheduleResult && (
+            <div className="mt-2 text-purple-800 bg-purple-50 border border-purple-200 rounded px-2 py-1.5">
+              Scheduled! Post ID:{" "}
+              <code className="bg-purple-100 px-1 rounded">
+                {scheduleResult.postId}
+              </code>{" "}
+              — {scheduleResult.scheduledFor} (ET) to TikTok + Instagram
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
