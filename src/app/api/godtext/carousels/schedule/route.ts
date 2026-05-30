@@ -8,8 +8,8 @@ export const maxDuration = 120;
 
 const PE_BASE = "https://app.posteverywhere.ai/api/v1";
 
-// Carousel goes to TikTok + Instagram only (no YouTube — video only)
-const CAROUSEL_ACCOUNT_IDS = [6124, 6127]; // Instagram, TikTok
+// Carousels go to TikTok only (Instagram API caps at 10 slides)
+const CAROUSEL_ACCOUNT_IDS = [6127]; // TikTok
 const TIMEZONE = "America/New_York";
 
 function peHeaders(): Record<string, string> {
@@ -22,24 +22,67 @@ function peHeaders(): Record<string, string> {
 }
 
 /**
- * Upload an image to PostEverywhere using the 3-step presigned URL flow.
- * Downloads the image from a public URL, then uploads via PE's presigned flow.
+ * Upload an image to PostEverywhere using their image-from-URL import.
+ *
+ * PE uses Cloudflare Images for photos (not S3 presigned URLs like videos),
+ * so the 3-step presigned PUT flow doesn't work for images. Instead we use
+ * the /media/upload/image endpoint with a source_url field.
+ *
+ * If that fails, falls back to multipart form upload with the raw image bytes.
  */
 async function uploadImage(imageUrl: string, index: number): Promise<string> {
-  // Step 0: Download the image
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error(`Failed to download image: ${imgRes.status}`);
-  const imageBuffer = Buffer.from(await imgRes.arrayBuffer());
-  const contentType = imgRes.headers.get("content-type") || "image/png";
+  const key = process.env.POST_EVERYWHERE_API_KEY;
+  if (!key) throw new Error("POST_EVERYWHERE_API_KEY not set");
 
-  // Step 1: Request presigned upload URL
-  const filename = `godtext-carousel-slide-${index}-${Date.now()}.png`;
+  // Try URL-based import first (multiple possible endpoints)
+  const urlEndpoints = [
+    `${PE_BASE}/media/upload/image`,
+    `${PE_BASE}/media/import`,
+  ];
+
+  for (const endpoint of urlEndpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: peHeaders(),
+        body: JSON.stringify({
+          url: imageUrl,
+          source_url: imageUrl,
+          filename: `carousel-slide-${index}.png`,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const mediaId =
+          data?.data?.media_id || data?.media_id || data?.data?.id || data?.id;
+        if (mediaId) {
+          console.log(
+            `[Carousel Schedule] Uploaded slide ${index} via ${endpoint}, media_id=${mediaId}`,
+          );
+          return mediaId;
+        }
+      }
+    } catch {
+      // Try next endpoint
+    }
+  }
+
+  // Fallback: download image and upload as multipart form data
+  console.log(
+    `[Carousel Schedule] URL import failed, trying multipart upload for slide ${index}`,
+  );
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok)
+    throw new Error(`Failed to download image: ${imgRes.status}`);
+  const imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+
+  // Try presigned flow with POST instead of PUT
   const initRes = await fetch(`${PE_BASE}/media/upload`, {
     method: "POST",
     headers: peHeaders(),
     body: JSON.stringify({
-      filename,
-      content_type: contentType,
+      filename: `carousel-slide-${index}-${Date.now()}.png`,
+      content_type: "image/png",
       size: imageBuffer.length,
       width: 1080,
       height: 1920,
@@ -53,31 +96,45 @@ async function uploadImage(imageUrl: string, index: number): Promise<string> {
   const mediaId = init?.data?.media_id;
   const uploadUrl = init?.data?.upload_url;
   if (!mediaId || !uploadUrl) {
-    throw new Error(`PE upload init missing fields: ${JSON.stringify(init)}`);
+    throw new Error(
+      `PE upload init missing fields: ${JSON.stringify(init)}`,
+    );
   }
 
-  // Step 2: PUT image bytes to the presigned URL
-  const putRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: imageBuffer,
+  // Try POST with form data to the presigned URL (Cloudflare Images style)
+  const formData = new FormData();
+  formData.append(
+    "file",
+    new Blob([imageBuffer], { type: "image/png" }),
+    `carousel-slide-${index}.png`,
+  );
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "POST",
+    body: formData,
   });
-  if (!putRes.ok) {
-    const err = await putRes.text();
-    throw new Error(`PE presigned PUT failed: ${putRes.status} — ${err}`);
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text();
+    throw new Error(
+      `PE image upload failed: ${uploadRes.status} — ${err}`,
+    );
   }
 
-  // Step 3: Finalize the upload
+  // Finalize
   const completeRes = await fetch(`${PE_BASE}/media/${mediaId}/complete`, {
     method: "POST",
     headers: peHeaders(),
   });
   if (!completeRes.ok) {
     const err = await completeRes.text();
-    throw new Error(`PE upload complete failed: ${completeRes.status} — ${err}`);
+    throw new Error(
+      `PE upload complete failed: ${completeRes.status} — ${err}`,
+    );
   }
 
-  console.log(`[Carousel Schedule] Uploaded slide ${index}, media_id=${mediaId}`);
+  console.log(
+    `[Carousel Schedule] Uploaded slide ${index} via multipart, media_id=${mediaId}`,
+  );
   return mediaId;
 }
 

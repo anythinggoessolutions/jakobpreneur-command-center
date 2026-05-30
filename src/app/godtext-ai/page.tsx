@@ -629,7 +629,7 @@ export default function GodTextAIPage() {
                 </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {buildFormat === "carousel"
-                    ? "Generate carousel slides from the selected script. Posts to TikTok + Instagram."
+                    ? "Generate carousel slides from the selected script. Posts to TikTok."
                     : "Assemble a 1080x1920 MP4 from the selected script. Posts to all platforms."}
                 </p>
               </div>
@@ -807,7 +807,7 @@ export default function GodTextAIPage() {
                     disabled={scheduling}
                     className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-colors disabled:opacity-40 cursor-pointer whitespace-nowrap"
                   >
-                    {scheduling ? "Scheduling…" : "Schedule to TikTok + Instagram"}
+                    {scheduling ? "Scheduling…" : "Schedule to TikTok"}
                   </button>
                 </div>
 
@@ -820,7 +820,7 @@ export default function GodTextAIPage() {
                 {scheduleResult && (
                   <div className="mt-2 text-purple-800 bg-purple-50 border border-purple-200 rounded px-2 py-1.5">
                     Scheduled! Post ID: <code className="bg-purple-100 px-1 rounded">{scheduleResult.postId}</code>
-                    {" "}— {scheduleResult.scheduledFor} (ET) to TikTok + Instagram
+                    {" "}— {scheduleResult.scheduledFor} (ET) to TikTok
                   </div>
                 )}
               </div>
@@ -1070,7 +1070,7 @@ function ThirstTrapSection({
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             AI-generated carousel with baddie photos + psychology-driven
-            texting tips that keep them swiping. Posts to TikTok + Instagram.
+            texting tips that keep them swiping. Posts to TikTok.
           </p>
         </div>
         <button
@@ -1201,7 +1201,7 @@ function ThirstTrapSection({
             >
               {scheduling
                 ? "Scheduling…"
-                : "Schedule to TikTok + Instagram"}
+                : "Schedule to TikTok"}
             </button>
           </div>
 
@@ -1217,7 +1217,7 @@ function ThirstTrapSection({
               <code className="bg-purple-100 px-1 rounded">
                 {scheduleResult.postId}
               </code>{" "}
-              — {scheduleResult.scheduledFor} (ET) to TikTok + Instagram
+              — {scheduleResult.scheduledFor} (ET) to TikTok
             </div>
           )}
         </div>
