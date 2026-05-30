@@ -1044,6 +1044,7 @@ function ThirstTrapSection({
           slideUrls: result.slideUrls,
           scheduledFor,
           hookText: result.topic,
+          accountIds: [6124, 6127], // TikTok + Instagram (thirst traps are under 10 slides)
         }),
       });
       const data = await res.json();
@@ -1070,7 +1071,7 @@ function ThirstTrapSection({
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
             AI-generated carousel with baddie photos + psychology-driven
-            texting tips that keep them swiping. Posts to TikTok.
+            texting tips that keep them swiping. Posts to TikTok + Instagram.
           </p>
         </div>
         <button
@@ -1201,7 +1202,7 @@ function ThirstTrapSection({
             >
               {scheduling
                 ? "Scheduling…"
-                : "Schedule to TikTok"}
+                : "Schedule to TikTok + Instagram"}
             </button>
           </div>
 
@@ -1217,7 +1218,7 @@ function ThirstTrapSection({
               <code className="bg-purple-100 px-1 rounded">
                 {scheduleResult.postId}
               </code>{" "}
-              — {scheduleResult.scheduledFor} (ET) to TikTok
+              — {scheduleResult.scheduledFor} (ET) to TikTok + Instagram
             </div>
           )}
         </div>

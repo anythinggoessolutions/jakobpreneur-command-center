@@ -8,8 +8,9 @@ export const maxDuration = 120;
 
 const PE_BASE = "https://app.posteverywhere.ai/api/v1";
 
-// Carousels go to TikTok only (Instagram API caps at 10 slides)
-const CAROUSEL_ACCOUNT_IDS = [6127]; // TikTok
+// Default: TikTok only (conversation carousels can exceed IG's 10-slide cap)
+// Thirst trap carousels (6-9 slides) pass both TikTok + Instagram explicitly
+const DEFAULT_ACCOUNT_IDS = [6127]; // TikTok
 const TIMEZONE = "America/New_York";
 
 function peHeaders(): Record<string, string> {
@@ -153,12 +154,15 @@ async function uploadImage(imageUrl: string, index: number): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { slideUrls, scheduledFor, caption, hookText } = body as {
+    const { slideUrls, scheduledFor, caption, hookText, accountIds } = body as {
       slideUrls?: string[];
       scheduledFor?: string;
       caption?: string;
       hookText?: string;
+      accountIds?: number[];
     };
+
+    const finalAccountIds = accountIds?.length ? accountIds : DEFAULT_ACCOUNT_IDS;
 
     if (!slideUrls || slideUrls.length === 0) {
       return NextResponse.json(
@@ -181,7 +185,7 @@ export async function POST(req: NextRequest) {
     // 3. Create the post with all images as a carousel
     const postBody: Record<string, unknown> = {
       content: finalCaption,
-      account_ids: CAROUSEL_ACCOUNT_IDS,
+      account_ids: finalAccountIds,
       media_ids: mediaIds,
       platform_content: {
         instagram: {
