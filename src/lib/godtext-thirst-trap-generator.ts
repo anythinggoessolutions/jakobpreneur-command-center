@@ -71,7 +71,33 @@ Topic variety — rotate across these angles:
 - The psychology behind why certain texts work
 - Common texting mistakes guys make`;
 
+const TOPIC_ANGLES = [
+  "texts that create instant attraction and make her think about you all day",
+  "what to do when she leaves you on read (the psychology behind it)",
+  "the first text to send after getting her number that sets the tone",
+  "red flags in her texts that mean she's losing interest — and how to fix it",
+  "how to keep a dying conversation alive without looking desperate",
+  "what girls actually want you to text (things guys never think to say)",
+  "the psychology behind why certain texts make her obsessed",
+  "common texting mistakes that kill attraction instantly",
+  "how to text after a first date so she wants a second one",
+  "the 'push-pull' texting technique that drives her crazy",
+  "why short texts win and long paragraphs lose every time",
+  "how to respond when she tests you over text",
+  "the one text that makes her smile every single time",
+  "what your texting speed says about you (and how to use it)",
+  "how to transition from texting to actually meeting up",
+  "the double text rule — when to do it and when to never",
+  "why being unpredictable over text makes her want you more",
+  "texts that make her friends say 'he's different'",
+  "how to recover after sending a cringe text",
+  "the morning text vs goodnight text debate — what actually works",
+];
+
 export async function generateThirstTrapCarousel(): Promise<ThirstTrapCarousel> {
+  // Pick a random topic angle to force variety each generation
+  const angle = TOPIC_ANGLES[Math.floor(Math.random() * TOPIC_ANGLES.length)];
+
   const response = await client.messages.parse({
     model: "claude-opus-4-7",
     max_tokens: 4000,
@@ -88,8 +114,7 @@ export async function generateThirstTrapCarousel(): Promise<ThirstTrapCarousel> 
     messages: [
       {
         role: "user",
-        content:
-          "Generate one thirst trap carousel now. Pick a fresh, specific topic. Make the hook irresistible and each tip an open loop that forces them to swipe.",
+        content: `Generate one thirst trap carousel now. Your topic angle for this one is: "${angle}". Make the hook irresistible and each tip an open loop that forces them to swipe. Do NOT reuse generic advice — be specific and surprising.`,
       },
     ],
   });
