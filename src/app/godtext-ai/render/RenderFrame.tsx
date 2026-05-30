@@ -548,16 +548,18 @@ function HookOverlay({ hookText }: { hookText: string }) {
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@500;600;700&display=swap');
       `}</style>
 
-      {/* Content — near top of safe zone so it doesn't cover the face */}
+      {/* Content — centered in safe zone */}
       <div
         style={{
           position: "absolute",
-          top: SAFE_TOP + 20,
+          top: SAFE_TOP,
+          bottom: FRAME_H - SAFE_BOTTOM,
           left: SAFE_LEFT,
           right: FRAME_W - SAFE_RIGHT,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
+          justifyContent: "center",
           gap: 12,
           zIndex: 1,
         }}

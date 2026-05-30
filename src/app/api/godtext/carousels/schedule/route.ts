@@ -8,9 +8,9 @@ export const maxDuration = 120;
 
 const PE_BASE = "https://app.posteverywhere.ai/api/v1";
 
-// Default: TikTok only (conversation carousels can exceed IG's 10-slide cap)
-// Thirst trap carousels (6-9 slides) pass both TikTok + Instagram explicitly
-const DEFAULT_ACCOUNT_IDS = [6127]; // TikTok
+// Default: both TikTok accounts (conversation carousels)
+// Thirst trap carousels pass IG too since they're under 10 slides
+const DEFAULT_ACCOUNT_IDS = [6127, 6282]; // GodText AI TikTok + Smoothreply TikTok
 const TIMEZONE = "America/New_York";
 
 function peHeaders(): Record<string, string> {

@@ -475,7 +475,7 @@ async function buildVideo(
         hook: "Texting huzz\n*Take notes*",
       });
 
-      // Compose: baddie photo full-screen + dark overlay + branded hook text
+      // Compose: baddie photo full-screen (full color) + text overlay
       const hookFramePath = path.join(jobDir, `frame-${pad(frameIdx)}-hook.png`);
       await execAsync(FFMPEG, [
         "-y",
@@ -484,8 +484,7 @@ async function buildVideo(
         "-i", hookOverlayPath,
         "-filter_complex",
         `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,${FRAME_H}):0:(ih-min(ih\\,${FRAME_H}))/2[baddie];` +
-        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1,` +
-        `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.45:t=fill[composed];` +
+        `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1[composed];` +
         `[2:v]colorkey=0x00FF00:0.3:0.15[txt];` +
         `[composed][txt]overlay=0:0:shortest=1`,
         "-frames:v", "1",
@@ -538,27 +537,7 @@ async function buildVideo(
 
     for (const msg of conversation.messages) {
       if (msg.sender === "man" && msg.show_godtext_ui) {
-        // Cooking steps (3 loading frames)
-        for (let step = 0; step < 3; step++) {
-          const cookPath = path.join(
-            jobDir,
-            `frame-${pad(frameIdx)}-cook-${step}.png`,
-          );
-          await screenshotFrame(page, baseUrl, cookPath, {
-            type: "cooking",
-            theme,
-            phase: "cooking",
-            step: String(step),
-          });
-          segments.push({
-            kind: "image",
-            path: cookPath,
-            duration: TIMING.cookingStep,
-          });
-          frameIdx++;
-        }
-
-        // Reply screen
+        // Show the "Send this" reply screen directly — no cooking animation
         const replyPath = path.join(
           jobDir,
           `frame-${pad(frameIdx)}-reply.png`,

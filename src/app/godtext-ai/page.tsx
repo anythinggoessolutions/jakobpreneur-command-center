@@ -1044,7 +1044,7 @@ function ThirstTrapSection({
           slideUrls: result.slideUrls,
           scheduledFor,
           hookText: result.topic,
-          accountIds: [6124, 6127], // TikTok + Instagram (thirst traps are under 10 slides)
+          accountIds: [6124, 6127, 6282], // Instagram + GodText TikTok + Smoothreply TikTok
         }),
       });
       const data = await res.json();

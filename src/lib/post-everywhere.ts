@@ -25,12 +25,14 @@ function peHeaders(): Record<string, string> {
 export const PE_ACCOUNTS = {
   instagram: 6124,
   tiktok: 6127,
+  tiktokSmoothreply: 6282,
   youtube: 6125,
 } as const;
 
 export const ALL_ACCOUNT_IDS = [
   PE_ACCOUNTS.instagram,
   PE_ACCOUNTS.tiktok,
+  PE_ACCOUNTS.tiktokSmoothreply,
   PE_ACCOUNTS.youtube,
 ];
 
