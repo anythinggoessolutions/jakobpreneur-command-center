@@ -73,7 +73,7 @@ Topic variety — rotate across these angles:
 
 export async function generateThirstTrapCarousel(): Promise<ThirstTrapCarousel> {
   const response = await client.messages.parse({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-opus-4-7",
     max_tokens: 4000,
     output_config: {
       format: zodOutputFormat(ThirstTrapCarouselSchema),
