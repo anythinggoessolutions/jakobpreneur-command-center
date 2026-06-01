@@ -252,13 +252,14 @@ async function buildThirstTrapCarousel(
       const baddiePath = path.join(jobDir, `baddie-${i}.jpg`);
       await downloadFile(baddie.url, baddiePath);
 
-      // Render text overlay on green screen
+      // Render text overlay on green screen (with font pairing from Claude)
       const overlayPath = path.join(jobDir, `overlay-${i}.png`);
       await screenshotFrame(page, baseUrl, overlayPath, {
         type: "thirst-trap",
         headline: slide.headline,
         subtext: slide.subtext || "",
         slideType: slide.slideType,
+        fontPairing: content.fontPairing || "syne",
       });
 
       // Compose: baddie photo + dark overlay + text
@@ -279,7 +280,7 @@ async function buildThirstTrapCarousel(
         "-filter_complex",
         `[1:v]scale=${FRAME_W}:-1,crop=${FRAME_W}:min(ih\\,${FRAME_H}):0:(ih-min(ih\\,${FRAME_H}))/2[baddie];` +
           `[0:v][baddie]overlay=0:(${FRAME_H}-overlay_h)/2:shortest=1,` +
-          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.55:t=fill[composed];` +
+          `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.30:t=fill[composed];` +
           `[2:v]colorkey=0x00FF00:0.3:0.15[txt];` +
           `[composed][txt]overlay=0:0:shortest=1`,
         "-frames:v",

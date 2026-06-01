@@ -120,11 +120,18 @@ export default function RenderFrame() {
       | "tip"
       | "twist"
       | "cta";
+    const fontPairing = (params.get("fontPairing") || "syne") as
+      | "syne"
+      | "bebas"
+      | "space"
+      | "playfair"
+      | "oswald";
     return (
       <ThirstTrapSlide
         headline={headline}
         subtext={subtext}
         slideType={slideType}
+        fontPairing={fontPairing}
       />
     );
   }
@@ -652,16 +659,36 @@ function BaddieOverlay({ introText }: { introText: string }) {
 // Thirst Trap slide — text overlay on green screen (baddie composited later)
 // ---------------------------------------------------------------------------
 
+const FONT_IMPORTS: Record<string, string> = {
+  syne: "https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap",
+  bebas: "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap",
+  space: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap",
+  playfair: "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;0,800;1,600&family=Lato:wght@400;700&display=swap",
+  oswald: "https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap",
+};
+
+const FONT_FAMILIES: Record<string, { headline: string; body: string }> = {
+  syne: { headline: "'Syne', sans-serif", body: "'DM Sans', system-ui, sans-serif" },
+  bebas: { headline: "'Bebas Neue', sans-serif", body: "'Inter', system-ui, sans-serif" },
+  space: { headline: "'Space Grotesk', sans-serif", body: "'Space Grotesk', sans-serif" },
+  playfair: { headline: "'Playfair Display', serif", body: "'Lato', sans-serif" },
+  oswald: { headline: "'Oswald', sans-serif", body: "'Source Sans 3', sans-serif" },
+};
+
 function ThirstTrapSlide({
   headline,
   subtext,
   slideType,
+  fontPairing = "syne",
 }: {
   headline: string;
   subtext: string;
   slideType: "hook" | "tip" | "twist" | "cta";
+  fontPairing?: "syne" | "bebas" | "space" | "playfair" | "oswald";
 }) {
   const isCta = slideType === "cta";
+  const fonts = FONT_FAMILIES[fontPairing] || FONT_FAMILIES.syne;
+  const fontImport = FONT_IMPORTS[fontPairing] || FONT_IMPORTS.syne;
 
   return (
     <div
@@ -674,7 +701,7 @@ function ThirstTrapSlide({
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+        @import url('${fontImport}');
       `}</style>
 
       <div
@@ -696,7 +723,7 @@ function ThirstTrapSlide({
         {isCta && (
           <div
             style={{
-              fontFamily: "'Syne', sans-serif",
+              fontFamily: fonts.headline,
               fontSize: 56,
               fontWeight: 800,
               color: "#fff",
@@ -712,13 +739,14 @@ function ThirstTrapSlide({
         {/* Headline */}
         <p
           style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: isCta ? 44 : 56,
-            fontWeight: 800,
+            fontFamily: fonts.headline,
+            fontSize: isCta ? 44 : fontPairing === "bebas" ? 68 : 56,
+            fontWeight: fontPairing === "bebas" ? 400 : 800,
             color: "#fff",
-            lineHeight: 1.15,
+            lineHeight: fontPairing === "bebas" ? 1.05 : 1.15,
             margin: 0,
             textAlign: isCta ? "center" : "left",
+            textTransform: fontPairing === "bebas" || fontPairing === "oswald" ? "uppercase" : "none",
             textShadow:
               "0 3px 20px rgba(0,0,0,0.85), 0 1px 6px rgba(0,0,0,0.9)",
             maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
@@ -731,13 +759,14 @@ function ThirstTrapSlide({
         {subtext && (
           <p
             style={{
-              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontFamily: fonts.body,
               fontSize: isCta ? 32 : 36,
               fontWeight: 500,
               color: "rgba(255,255,255,0.85)",
               lineHeight: 1.35,
               margin: 0,
               textAlign: isCta ? "center" : "left",
+              fontStyle: fontPairing === "playfair" ? "italic" : "normal",
               textShadow:
                 "0 2px 12px rgba(0,0,0,0.8), 0 1px 4px rgba(0,0,0,0.9)",
               maxWidth: SAFE_RIGHT - SAFE_LEFT - 40,
@@ -755,7 +784,7 @@ function ThirstTrapSlide({
               borderRadius: 20,
               background: "#FF4400",
               color: "#fff",
-              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontFamily: fonts.body,
               fontSize: 28,
               fontWeight: 700,
               textShadow: "none",
@@ -773,7 +802,7 @@ function ThirstTrapSlide({
               position: "absolute",
               top: 0,
               left: 0,
-              fontFamily: "'DM Sans', system-ui, sans-serif",
+              fontFamily: fonts.body,
               fontSize: 20,
               fontWeight: 700,
               color: "rgba(255,255,255,0.5)",

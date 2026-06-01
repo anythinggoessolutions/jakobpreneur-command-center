@@ -24,7 +24,7 @@ function peHeaders(): Record<string, string> {
 // ---------------------------------------------------------------------------
 export const PE_ACCOUNTS = {
   instagram: 6124,
-  tiktok: 6127,
+  tiktok: 6313,
   tiktokSmoothreply: 6282,
   youtube: 6125,
 } as const;

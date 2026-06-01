@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { upload } from "@vercel/blob/client";
 
-type VaultKind = "rizz" | "ui-refs" | "hype-clips" | "music" | "hook-backgrounds" | "baddie-photos";
+type VaultKind = "rizz" | "ui-refs" | "hype-clips" | "music" | "intro-audio" | "hook-backgrounds" | "baddie-photos";
 
 type VaultRecord = {
   id: string;
@@ -66,6 +66,12 @@ const KIND_CONFIG: Record<
     urlField: "Audio URL",
     accept: "audio/mpeg,audio/mp3,audio/wav,audio/mp4,audio/x-m4a,audio/aac",
     accentClass: "border-violet-200 bg-violet-50/40",
+  },
+  "intro-audio": {
+    route: "/api/godtext/intro-audio",
+    urlField: "Audio URL",
+    accept: "audio/mpeg,audio/mp3,audio/wav,audio/mp4,audio/x-m4a,audio/aac",
+    accentClass: "border-orange-200 bg-orange-50/40",
   },
   "hook-backgrounds": {
     route: "/api/godtext/hook-backgrounds",
@@ -143,7 +149,7 @@ export default function GodTextVaultGrid({ kind, title, description, defaultColl
           const body: Record<string, unknown> = { name: file.name };
           if (kind === "rizz" || kind === "ui-refs" || kind === "baddie-photos") body.imageUrl = blob.url;
           if (kind === "hype-clips" || kind === "hook-backgrounds") body.mediaUrl = blob.url;
-          if (kind === "music") body.audioUrl = blob.url;
+          if (kind === "music" || kind === "intro-audio") body.audioUrl = blob.url;
           for (const ef of config.extraFields || []) {
             body[ef.key] = extraValues[ef.key];
           }
@@ -275,10 +281,10 @@ export default function GodTextVaultGrid({ kind, title, description, defaultColl
         <div className="text-xs text-zinc-400">Loading…</div>
       ) : records.length === 0 ? (
         <div className="text-xs text-zinc-400">Nothing here yet.</div>
-      ) : kind === "music" || kind === "hype-clips" || kind === "hook-backgrounds" ? (
+      ) : kind === "music" || kind === "intro-audio" || kind === "hype-clips" || kind === "hook-backgrounds" ? (
         <div className="flex flex-col gap-1">
           {records.map((rec) => (
-            kind === "music" ? (
+            kind === "music" || kind === "intro-audio" ? (
               <MusicRow
                 key={rec.id}
                 record={rec}

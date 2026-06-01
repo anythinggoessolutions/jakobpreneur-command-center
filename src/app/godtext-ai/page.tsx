@@ -356,6 +356,16 @@ export default function GodTextAIPage() {
           />
         </section>
 
+        {/* --- Section 2.52: Intro Audio --- */}
+        <section className="mb-6">
+          <GodTextVaultGrid
+            kind="intro-audio"
+            title="Intro Audio"
+            description="Sound that plays at the start of every video over the hook frame (~4 seconds). Upload one audio file."
+            defaultCollapsed
+          />
+        </section>
+
         {/* --- Section 2.55: Hook Backgrounds Vault --- */}
         <section className="mb-6">
           <GodTextVaultGrid
@@ -1044,7 +1054,7 @@ function ThirstTrapSection({
           slideUrls: result.slideUrls,
           scheduledFor,
           hookText: result.topic,
-          accountIds: [6124, 6127, 6282], // Instagram + GodText TikTok + Smoothreply TikTok
+          accountIds: [6124, 6313, 6282], // Instagram + GodText TikTok (godtextai) + Smoothreply TikTok
         }),
       });
       const data = await res.json();

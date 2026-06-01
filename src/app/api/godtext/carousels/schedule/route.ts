@@ -10,7 +10,7 @@ const PE_BASE = "https://app.posteverywhere.ai/api/v1";
 
 // Default: both TikTok accounts (conversation carousels)
 // Thirst trap carousels pass IG too since they're under 10 slides
-const DEFAULT_ACCOUNT_IDS = [6127, 6282]; // GodText AI TikTok + Smoothreply TikTok
+const DEFAULT_ACCOUNT_IDS = [6313, 6282]; // GodText AI TikTok (godtextai) + Smoothreply TikTok
 const TIMEZONE = "America/New_York";
 
 function peHeaders(): Record<string, string> {

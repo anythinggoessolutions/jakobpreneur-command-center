@@ -141,6 +141,31 @@ async function markBaddieUsed(recordId: string): Promise<void> {
   );
 }
 
+async function fetchIntroAudioUrl(): Promise<string | null> {
+  const base = process.env.AIRTABLE_BASE_ID;
+  if (!base) return null;
+  const url = new URL(
+    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Intro Audio")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const urls = (data.records || [])
+    .map(
+      (r: { fields: Record<string, unknown> }) =>
+        r.fields["Audio URL"] as string,
+    )
+    .filter(
+      (u: unknown): u is string =>
+        typeof u === "string" && (u as string).length > 0,
+    );
+  // Use the first (most recent) intro audio — there should typically be just one.
+  return urls.length > 0 ? urls[0] : null;
+}
+
 async function fetchRandomMusicUrl(): Promise<string | null> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return null;
@@ -314,6 +339,7 @@ function pad(n: number): string {
 async function ffmpegAssemble(
   segments: Segment[],
   musicPath: string | null,
+  introAudioPath: string | null,
   outputPath: string,
   jobDir: string,
 ): Promise<void> {
@@ -367,12 +393,39 @@ async function ffmpegAssemble(
     rawConcat,
   ]);
 
+  // Mix in the GodText intro sound at the very start of the video.
+  // The intro plays over the hook frame (~4s), fades out, then silence.
+  // Video audio (silent from anullsrc) is preserved so the music step
+  // can layer on top without issues.
+  let baseVideo = rawConcat;
+  if (introAudioPath) {
+    try {
+      const withIntro = path.join(jobDir, "with-intro.mp4");
+      await execAsync(FFMPEG, [
+        "-y",
+        "-i", rawConcat,
+        "-i", introAudioPath,
+        "-filter_complex",
+        "[1:a]afade=t=out:st=3:d=1.3[intro];" +
+          "[0:a][intro]amix=inputs=2:duration=first:dropout_transition=0[a]",
+        "-map", "0:v",
+        "-map", "[a]",
+        "-c:v", "copy",
+        "-c:a", "aac", "-ar", "44100",
+        withIntro,
+      ], { timeout: 60000 });
+      baseVideo = withIntro;
+    } catch (err) {
+      console.warn("[Video Build] Failed to mix intro audio:", err);
+    }
+  }
+
   if (musicPath) {
     const probeResult = await execAsync(FFPROBE, [
       "-v", "error",
       "-show_entries", "format=duration",
       "-of", "default=noprint_wrappers=1:nokey=1",
-      rawConcat,
+      baseVideo,
     ]);
     const videoDur = parseFloat(probeResult.stdout.trim()) || 30;
     const fadeOutStart = Math.max(0, videoDur - 2);
@@ -381,14 +434,16 @@ async function ffmpegAssemble(
       FFMPEG,
       [
         "-y",
-        "-i", rawConcat,
+        "-i", baseVideo,
         "-stream_loop", "-1",
         "-i", musicPath,
         "-t", String(videoDur),
         "-filter_complex",
-        `[1:a]atrim=0:${videoDur},volume=0.15,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music]`,
+        // Mix existing audio (which now includes intro sound) with background music
+        `[1:a]atrim=0:${videoDur},volume=0.15,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music];` +
+          `[0:a][music]amix=inputs=2:duration=first:dropout_transition=0[a]`,
         "-map", "0:v",
-        "-map", "[music]",
+        "-map", "[a]",
         "-c:v", "copy",
         "-c:a", "aac",
         "-ar", "44100",
@@ -397,7 +452,7 @@ async function ffmpegAssemble(
       { timeout: 120000 },
     );
   } else {
-    await fs.rename(rawConcat, outputPath);
+    await fs.rename(baseVideo, outputPath);
   }
 }
 
@@ -413,10 +468,11 @@ async function buildVideo(
   // Use the same dev server that's running this API route
   const baseUrl = "http://localhost:3000";
 
-  // Fetch hype clips, music, hook backgrounds, and unused baddie photos from vaults
-  const [hypeClips, musicUrl, hookBgUrls, unusedBaddies] = await Promise.all([
+  // Fetch hype clips, music, intro audio, hook backgrounds, and unused baddie photos from vaults
+  const [hypeClips, musicUrl, introAudioUrl, hookBgUrls, unusedBaddies] = await Promise.all([
     fetchHypeClips(),
     fetchRandomMusicUrl(),
+    fetchIntroAudioUrl(),
     fetchHookBackgrounds(),
     fetchUnusedBaddiePhotos(),
   ]);
@@ -429,6 +485,17 @@ async function buildVideo(
       await downloadFile(musicUrl, musicPath);
     } catch {
       musicPath = null;
+    }
+  }
+
+  // Download intro audio if available
+  let introAudioPath: string | null = null;
+  if (introAudioUrl) {
+    introAudioPath = path.join(jobDir, "intro-audio.mp3");
+    try {
+      await downloadFile(introAudioUrl, introAudioPath);
+    } catch {
+      introAudioPath = null;
     }
   }
 
@@ -613,7 +680,7 @@ async function buildVideo(
     jobDir,
     `godtext-${conversation.platform.toLowerCase()}-${Date.now()}.mp4`,
   );
-  await ffmpegAssemble(segments, musicPath, outputPath, jobDir);
+  await ffmpegAssemble(segments, musicPath, introAudioPath, outputPath, jobDir);
 
   return outputPath;
 }

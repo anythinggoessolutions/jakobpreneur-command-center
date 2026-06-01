@@ -30,7 +30,7 @@ export const GodTextConversationSchema = z.object({
   womanName: z
     .string()
     .describe(
-      "The woman's first name displayed in the chat header. Pick a different, common first name every time — never repeat the same name across calls. Examples: Sofia, Jess, Aaliyah, Priya, Chloe, Mia, Lauren, Destiny, Nadia, etc.",
+      "The woman's first name displayed in the chat header. Pick a DIFFERENT name every single time. Pull from a wide range — short names, long names, trendy names, classic names, names from different cultures. Never fall back on the same 10 names.",
     ),
   hookText: z
     .string()
@@ -103,7 +103,7 @@ Platform rule — CRITICAL:
 - If given an "exclude platforms" hint, you MUST pick a DIFFERENT platform from those listed.
 
 Name rule:
-- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Vary ethnicity, length, and vibe — Sofia, Jess, Aaliyah, Priya, Chloe, Destiny, Nadia, Lauren, Mia, etc. No two consecutive scripts should share a name.`;
+- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Pull from a WIDE pool — mix trendy (Zara, Kaia, Amara), classic (Grace, Rachel, Sarah), short (Nia, Eve, Kai, Bri), long (Valentina, Anastasia, Gabriella), international (Yuki, Leila, Ines, Fatima, Sienna, Freya, Camille, Daria, Mei, Anika, Soleil, Thalia, Paloma, Noemi, Liora, Suki, Zuri, Maren, Ingrid, Ximena). Never default to the same 10 names.`;
 
 /**
  * Generate a conversation script using a curated set of rizz-vault images
