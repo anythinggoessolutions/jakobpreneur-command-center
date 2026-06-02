@@ -3,6 +3,7 @@ import { execFile } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import { promisify } from "util";
+import { generateCommentaryAudio } from "@/lib/elevenlabs-tts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,14 +33,15 @@ const TIMING = {
 // ---------------------------------------------------------------------------
 
 type Segment =
-  | { kind: "image"; path: string; duration: number }
-  | { kind: "video"; path: string };
+  | { kind: "image"; path: string; duration: number; commentaryAudio?: string }
+  | { kind: "video"; path: string; commentaryAudio?: string };
 
 type ConversationMsg = {
   sender: "man" | "woman";
   text: string;
   show_godtext_ui?: boolean;
   escalation_level?: string;
+  commentary?: string;
 };
 
 type Conversation = {
@@ -348,19 +350,44 @@ async function ffmpegAssemble(
 
   for (const seg of segments) {
     const outVid = path.join(jobDir, `seg-${pad(segIdx)}.mp4`);
+    const hasCommentary = !!seg.commentaryAudio;
+
     if (seg.kind === "image") {
-      await execAsync(FFMPEG, [
-        "-y", "-loop", "1", "-i", seg.path,
-        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
-        "-t", String(seg.duration),
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
-        "-vf",
-        `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=decrease,pad=${FRAME_W}:${FRAME_H}:(ow-iw)/2:(oh-ih)/2:black`,
-        "-c:a", "aac", "-ar", "44100", "-ac", "2",
-        "-shortest", "-preset", "fast", "-crf", "18",
-        outVid,
-      ]);
+      if (hasCommentary) {
+        // Image segment with commentary voiceover — use commentary audio
+        // instead of silence, pad with silence if image is longer than audio
+        await execAsync(FFMPEG, [
+          "-y", "-loop", "1", "-i", seg.path,
+          "-i", seg.commentaryAudio!,
+          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+          "-t", String(seg.duration),
+          "-filter_complex",
+          `[1:a]aresample=44100,apad=whole_dur=${seg.duration}[vo];` +
+            `[vo]atrim=0:${seg.duration}[vopad]`,
+          "-map", "0:v", "-map", "[vopad]",
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
+          "-vf",
+          `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=decrease,pad=${FRAME_W}:${FRAME_H}:(ow-iw)/2:(oh-ih)/2:black`,
+          "-c:a", "aac", "-ar", "44100", "-ac", "2",
+          "-shortest", "-preset", "fast", "-crf", "18",
+          outVid,
+        ]);
+      } else {
+        // Image segment with silence
+        await execAsync(FFMPEG, [
+          "-y", "-loop", "1", "-i", seg.path,
+          "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+          "-t", String(seg.duration),
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
+          "-vf",
+          `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=decrease,pad=${FRAME_W}:${FRAME_H}:(ow-iw)/2:(oh-ih)/2:black`,
+          "-c:a", "aac", "-ar", "44100", "-ac", "2",
+          "-shortest", "-preset", "fast", "-crf", "18",
+          outVid,
+        ]);
+      }
     } else {
+      // Video segment — always silent (hype clips have their own audio stripped)
       await execAsync(FFMPEG, [
         "-y", "-i", seg.path,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
@@ -599,10 +626,28 @@ async function buildVideo(
       frameIdx++;
     }
 
+    // Generate commentary voiceover audio for messages that have it.
+    // Done up-front so ElevenLabs calls run before the segment loop.
+    const commentaryAudioPaths: Map<number, string> = new Map();
+    for (let i = 0; i < conversation.messages.length; i++) {
+      const msg = conversation.messages[i];
+      if (msg.commentary) {
+        try {
+          const audioPath = path.join(jobDir, `commentary-${i}.mp3`);
+          await generateCommentaryAudio(msg.commentary, audioPath);
+          commentaryAudioPaths.set(i, audioPath);
+          console.log(`[Video Build] Commentary ${i}: "${msg.commentary.slice(0, 50)}..."`);
+        } catch (err) {
+          console.warn(`[Video Build] Failed to generate commentary ${i}:`, err);
+        }
+      }
+    }
+
     // Walk through messages
     const visibleMessages: { sender: string; text: string }[] = [];
 
-    for (const msg of conversation.messages) {
+    for (let msgIdx = 0; msgIdx < conversation.messages.length; msgIdx++) {
+      const msg = conversation.messages[msgIdx];
       if (msg.sender === "man" && msg.show_godtext_ui) {
         // Show the "Send this" reply screen directly — no cooking animation
         const replyPath = path.join(
@@ -638,10 +683,30 @@ async function buildVideo(
           ? { womanName: conversation.womanName }
           : {}),
       });
+      // If this message has commentary, attach the audio to this segment.
+      // The commentary plays during this frame — we extend the duration to
+      // fit the voiceover so the narrator has time to speak.
+      const commentaryPath = commentaryAudioPaths.get(msgIdx);
+      let frameDuration = TIMING.message;
+      if (commentaryPath) {
+        try {
+          const probeRes = await execAsync(FFPROBE, [
+            "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1", commentaryPath,
+          ]);
+          const audioDur = parseFloat(probeRes.stdout.trim()) || 0;
+          // Ensure frame is at least as long as the commentary + a small buffer
+          frameDuration = Math.max(TIMING.message, audioDur + 0.5);
+        } catch {
+          // Fall back to default duration
+        }
+      }
+
       segments.push({
         kind: "image",
         path: phonePath,
-        duration: TIMING.message,
+        duration: frameDuration,
+        ...(commentaryPath ? { commentaryAudio: commentaryPath } : {}),
       });
       frameIdx++;
 

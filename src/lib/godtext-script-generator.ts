@@ -54,6 +54,20 @@ export const GodTextConversationSchema = z.object({
           .describe(
             "ONLY on woman messages. Drives hype-clip intensity selection in the video assembly step. Final woman message should be 'maximum'.",
           ),
+        commentary: z
+          .string()
+          .optional()
+          .describe(
+            "Documentary narrator voiceover that plays BEFORE this message appears. " +
+            "Written as a British nature-documentary commentator observing the texting like wildlife. " +
+            "Short (1-2 sentences max). Funny, dry, witty. Occasionally curses for comedic effect. " +
+            "Only 3-5 messages should have commentary — NOT every message. " +
+            "MUST appear on: the first message (scene-setting), at least one GodText AI moment, and the final woman message (the payoff). " +
+            "Examples: 'And here we observe the young male, preparing his opening gambit.', " +
+            "'He\\'s called in reinforcements. The AI is cooking.', " +
+            "'Bloody hell. She\\'s actually going for it.', " +
+            "'And just like that... another one falls.'",
+          ),
       }),
     )
     .min(4)
@@ -103,7 +117,16 @@ Platform rule — CRITICAL:
 - If given an "exclude platforms" hint, you MUST pick a DIFFERENT platform from those listed.
 
 Name rule:
-- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Pull from a WIDE pool — mix trendy (Zara, Kaia, Amara), classic (Grace, Rachel, Sarah), short (Nia, Eve, Kai, Bri), long (Valentina, Anastasia, Gabriella), international (Yuki, Leila, Ines, Fatima, Sienna, Freya, Camille, Daria, Mei, Anika, Soleil, Thalia, Paloma, Noemi, Liora, Suki, Zuri, Maren, Ingrid, Ximena). Never default to the same 10 names.`;
+- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Pull from a WIDE pool — mix trendy (Zara, Kaia, Amara), classic (Grace, Rachel, Sarah), short (Nia, Eve, Kai, Bri), long (Valentina, Anastasia, Gabriella), international (Yuki, Leila, Ines, Fatima, Sienna, Freya, Camille, Daria, Mei, Anika, Soleil, Thalia, Paloma, Noemi, Liora, Suki, Zuri, Maren, Ingrid, Ximena). Never default to the same 10 names.
+
+Commentator voiceover rules:
+- Each video has a British documentary narrator (think David Attenborough observing wildlife, but he's watching someone text a girl).
+- Add a "commentary" field to 3-5 messages (NOT every message). The commentary plays as voiceover BEFORE that message appears on screen.
+- The narrator is dry, witty, occasionally drops a mild curse word for comedic effect (bloody hell, taking the piss, etc.).
+- He treats the texting conversation like a nature documentary — "the young male", "the female", "a bold strategy", "observe closely".
+- MANDATORY commentary on: (1) the very first message (sets the scene), (2) at least one message with show_godtext_ui (narrates the AI helping), (3) the final woman message (the payoff reaction).
+- Keep each line SHORT — 1-2 sentences max. It needs to fit naturally in the pauses between messages.
+- The humor comes from the contrast between the serious documentary tone and the silly texting situation. Don't try too hard — understated is funnier.`;
 
 /**
  * Generate a conversation script using a curated set of rizz-vault images
