@@ -184,7 +184,7 @@ export default function GodTextAIPage() {
       if (buildFormat === "carousel") {
         const buildUrl = isLocal
           ? "/api/godtext/carousels/build"
-          : "https://localhost:3000/api/godtext/carousels/build";
+          : "http://localhost:3000/api/godtext/carousels/build";
 
         const res = await fetch(buildUrl, {
           method: "POST",
@@ -201,7 +201,7 @@ export default function GodTextAIPage() {
       } else {
         const buildUrl = isLocal
           ? "/api/godtext/videos/build"
-          : "https://localhost:3000/api/godtext/videos/build";
+          : "http://localhost:3000/api/godtext/videos/build";
 
         const res = await fetch(buildUrl, {
           method: "POST",
@@ -1014,7 +1014,7 @@ function ThirstTrapSection({
         window.location.hostname === "127.0.0.1";
       const buildUrl = isLocal
         ? "/api/godtext/carousels/thirst-trap"
-        : "https://localhost:3000/api/godtext/carousels/thirst-trap";
+        : "http://localhost:3000/api/godtext/carousels/thirst-trap";
 
       const res = await fetch(buildUrl, {
         method: "POST",
