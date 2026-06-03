@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
     // Return a confirmation URL and tracking code as required by Meta
     return NextResponse.json({
-      url: "https://jakobprenuer.com/privacy",
+      url: "https://anythinggoessolutionsllc.com/privacy",
       confirmation_code: `del_${Date.now()}`,
     });
   } catch {

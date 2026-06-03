@@ -753,7 +753,7 @@ async function buildVideo(
 }
 
 // ---------------------------------------------------------------------------
-// CORS — allows the production site (jakobprenuer.com) to call localhost
+// CORS — allows the production site (anythinggoessolutionsllc.com) to call localhost
 // ---------------------------------------------------------------------------
 
 const CORS_HEADERS = {
@@ -775,7 +775,7 @@ export async function OPTIONS() {
  * Launches Playwright to screenshot frames, encodes with ffmpeg,
  * uploads the MP4 to Vercel Blob. Only works locally (npm run dev).
  *
- * The production site at jakobprenuer.com calls this endpoint on
+ * The production site at anythinggoessolutionsllc.com calls this endpoint on
  * localhost:3000 — CORS headers allow the cross-origin request.
  *
  * Body: { conversation: object, theme?: "dark" | "white" }
