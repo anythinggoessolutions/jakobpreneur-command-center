@@ -41,10 +41,21 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center">
-              <span className="text-white font-black text-xs">J</span>
-            </div>
-            <span className="text-zinc-900 font-bold text-base">jakobpreneur</span>
+            {pathname.startsWith("/godtext-ai") ? (
+              <>
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-500 to-orange-500 flex items-center justify-center">
+                  <span className="text-white font-black text-xs">G</span>
+                </div>
+                <span className="text-zinc-900 font-bold text-base">GodText AI</span>
+              </>
+            ) : (
+              <>
+                <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center">
+                  <span className="text-white font-black text-xs">J</span>
+                </div>
+                <span className="text-zinc-900 font-bold text-base">jakobpreneur</span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-1">
