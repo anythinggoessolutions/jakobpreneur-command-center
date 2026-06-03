@@ -207,6 +207,8 @@ export default function GodTextAIPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversation, theme: videoTheme }),
+          // Video builds with commentary TTS can take 2-3 minutes
+          signal: AbortSignal.timeout(300000),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);

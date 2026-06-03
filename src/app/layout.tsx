@@ -15,8 +15,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "jakobpreneur Command Center",
-  description: "Content automation dashboard for @jakobpreneur",
+  title: "Anything Goes Solutions LLC",
+  description: "Creator tools for social media content generation and distribution.",
+  icons: {
+    icon: "/ags-favicon.png",
+    apple: "/ags-apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({

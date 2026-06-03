@@ -1,21 +1,27 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy · jakobpreneur Command Center",
+  title: "Privacy Policy - Anything Goes Solutions LLC",
   description:
-    "Privacy Policy for the jakobpreneur Command Center creator platform.",
+    "Privacy Policy for Anything Goes Solutions LLC creator platform.",
 };
 
 export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
+      {/* App icon in header — required by TikTok developer review */}
+      <div className="flex items-center gap-3 mb-8">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/ags-icon.png" alt="Anything Goes Solutions LLC" className="w-10 h-10 rounded-lg" />
+        <span className="text-lg font-bold text-zinc-900">Anything Goes Solutions LLC</span>
+      </div>
       <h1 className="text-3xl font-bold text-zinc-900 mb-2">Privacy Policy</h1>
-      <p className="text-sm text-zinc-500 mb-10">Last updated: May 5, 2026</p>
+      <p className="text-sm text-zinc-500 mb-10">Last updated: June 2, 2026</p>
 
       <div className="prose prose-zinc max-w-none text-sm text-zinc-700 space-y-6 leading-relaxed">
         <Section title="1. Introduction">
           <p>
-            This Privacy Policy describes how jakobpreneur Command Center
+            This Privacy Policy describes how Anything Goes Solutions LLC
             (&quot;the Platform&quot;, &quot;we&quot;, &quot;us&quot;, or
             &quot;our&quot;), operated by Jakob Rubenstein, collects, uses,
             shares, and protects information when you use the Platform. By

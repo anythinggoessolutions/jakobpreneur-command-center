@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service · jakobpreneur Command Center",
+  title: "Terms of Service - Anything Goes Solutions LLC",
   description:
-    "Terms of Service for the jakobpreneur Command Center creator platform.",
+    "Terms of Service for Anything Goes Solutions LLC creator platform.",
 };
 
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
+      {/* App icon in header — required by TikTok developer review */}
+      <div className="flex items-center gap-3 mb-8">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/ags-icon.png" alt="Anything Goes Solutions LLC" className="w-10 h-10 rounded-lg" />
+        <span className="text-lg font-bold text-zinc-900">Anything Goes Solutions LLC</span>
+      </div>
       <h1 className="text-3xl font-bold text-zinc-900 mb-2">
         Terms of Service
       </h1>
       <p className="text-sm text-zinc-500 mb-10">
-        Last updated: May 5, 2026
+        Last updated: June 2, 2026
       </p>
 
       <div className="prose prose-zinc max-w-none text-sm text-zinc-700 space-y-6 leading-relaxed">
@@ -21,7 +27,7 @@ export default function TermsPage() {
           <p>
             These Terms of Service (&quot;Terms&quot;) form a binding agreement
             between you (&quot;you&quot;, &quot;your&quot;, or &quot;User&quot;)
-            and jakobpreneur Command Center (&quot;the Platform&quot;,
+            and Anything Goes Solutions LLC (&quot;the Platform&quot;,
             &quot;we&quot;, &quot;us&quot;, or &quot;our&quot;), operated by
             Jakob Rubenstein. By accessing or using the Platform, you agree to
             be bound by these Terms and our{" "}
@@ -35,7 +41,7 @@ export default function TermsPage() {
 
         <Section title="2. Description of the Platform">
           <p>
-            jakobpreneur Command Center is a creator platform that helps social
+            Anything Goes Solutions LLC is a creator platform that helps social
             media creators plan, generate, optimize, and publish short-form
             video content. The Platform provides tools for AI-assisted caption
             and hashtag generation, image carousel rendering, content

@@ -362,7 +362,7 @@ async function ffmpegAssemble(
           "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
           "-t", String(seg.duration),
           "-filter_complex",
-          `[1:a]aresample=44100,apad=whole_dur=${seg.duration}[vo];` +
+          `[1:a]aresample=44100,volume=2.5,loudnorm=I=-14:TP=-1:LRA=7,apad=whole_dur=${seg.duration}[vo];` +
             `[vo]atrim=0:${seg.duration}[vopad]`,
           "-map", "0:v", "-map", "[vopad]",
           "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
@@ -433,7 +433,9 @@ async function ffmpegAssemble(
         "-i", rawConcat,
         "-i", introAudioPath,
         "-filter_complex",
-        "[1:a]afade=t=out:st=3:d=1.3[intro];" +
+        // Boost intro to max volume, NO fade — play the full clip including
+        // the gun-cock sound at the end, then cut straight to messages
+        "[1:a]volume=3.0,loudnorm=I=-14:TP=-1:LRA=7[intro];" +
           "[0:a][intro]amix=inputs=2:duration=first:dropout_transition=0[a]",
         "-map", "0:v",
         "-map", "[a]",
@@ -467,7 +469,7 @@ async function ffmpegAssemble(
         "-t", String(videoDur),
         "-filter_complex",
         // Mix existing audio (which now includes intro sound) with background music
-        `[1:a]atrim=0:${videoDur},volume=0.15,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music];` +
+        `[1:a]atrim=0:${videoDur},volume=0.20,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music];` +
           `[0:a][music]amix=inputs=2:duration=first:dropout_transition=0[a]`,
         "-map", "0:v",
         "-map", "[a]",

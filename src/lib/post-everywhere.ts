@@ -70,20 +70,42 @@ function pick<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// Core hashtags on every post + a rotating pool to keep it fresh.
+// 3-5 total per post — algorithm penalizes too many.
+const ALWAYS_TAGS = ["#rizz"];
+const ROTATING_TAGS = [
+  "#rizzler",
+  "#rizzking",
+  "#textgame",
+  "#pickuplines",
+  "#datingadvice",
+  "#rizzgod",
+  "#texting",
+  "#situationships",
+  "#moderndating",
+  "#datingtips",
+];
+
+function pickN<T>(arr: readonly T[], n: number): T[] {
+  const shuffled = [...arr].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, n);
+}
+
 /**
  * Generate a caption for a GodText AI video post.
  *
  * Format:
- *   <caption relatable to the video>
- *   @godtextai
- *   #viral #pickupline #rizz #fyp
+ *   <caption> @godtextai
+ *   #rizz #fyp + 2-3 rotating niche tags
  *
  * If hookText is provided (from the script), it's used as the caption.
  * Otherwise a random fallback caption is picked.
  */
 export function generateCaption(hookText?: string): string {
   const caption = hookText || pick(FALLBACK_CAPTIONS);
-  return `${caption} @godtextai\n#viral #pickupline #rizz #fyp`;
+  const rotating = pickN(ROTATING_TAGS, 3);
+  const tags = [...ALWAYS_TAGS, ...rotating].join(" ");
+  return `${caption} @godtextai\n${tags}`;
 }
 
 // ---------------------------------------------------------------------------

@@ -8,8 +8,10 @@ export default function Home() {
           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
           Creator Platform
         </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/ags-icon.png" alt="Anything Goes Solutions LLC" className="w-16 h-16 rounded-2xl mx-auto mb-4" />
         <h1 className="text-4xl sm:text-5xl font-bold text-zinc-900 tracking-tight mb-6">
-          jakobpreneur Command Center
+          Anything Goes Solutions LLC
         </h1>
         <p className="text-lg text-zinc-600 max-w-2xl mx-auto leading-relaxed">
           A creator platform for AI captions, hashtags, and social media
