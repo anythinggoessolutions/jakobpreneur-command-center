@@ -552,7 +552,7 @@ function HookOverlay({ hookText }: { hookText: string }) {
       }}
     >
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
       `}</style>
 
       {/* Content — centered in safe zone */}
@@ -573,9 +573,9 @@ function HookOverlay({ hookText }: { hookText: string }) {
       >
         <div
           style={{
-            fontFamily: "'Syne', sans-serif",
-            fontSize: 80,
-            fontWeight: 800,
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontSize: 76,
+            fontWeight: 700,
             color: "#FFFFFF",
             textAlign: "center",
             lineHeight: 1.15,
