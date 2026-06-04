@@ -152,7 +152,7 @@ Platform rule — CRITICAL:
 - If given an "exclude platforms" hint, you MUST pick a DIFFERENT platform from those listed.
 
 Name rule:
-- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Pull from a WIDE pool — mix trendy (Zara, Kaia, Amara), classic (Grace, Rachel, Sarah), short (Nia, Eve, Kai, Bri), long (Valentina, Anastasia, Gabriella), international (Yuki, Leila, Ines, Fatima, Sienna, Freya, Camille, Daria, Mei, Anika, Soleil, Thalia, Paloma, Noemi, Liora, Suki, Zuri, Maren, Ingrid, Ximena). Never default to the same 10 names.
+- Pick a random, realistic first name for the woman every single time. NEVER reuse the same name across scripts. Pull from a WIDE pool. Do NOT use names from the examples — invent your own every time. Mix short (3-4 letters), medium, and long names from different backgrounds. Be creative and unpredictable. If a name feels obvious or common, pick something else.
 
 Commentator voiceover rules:
 - Each video has a British documentary narrator (think David Attenborough observing wildlife, but he's watching someone text a girl).

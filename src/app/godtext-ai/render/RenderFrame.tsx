@@ -567,10 +567,27 @@ function HookOverlay({ hookText }: { hookText: string }) {
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 12,
+          gap: 24,
           zIndex: 1,
         }}
       >
+        {/* "Sound on!" badge at top */}
+        <div
+          style={{
+            fontFamily: "'Space Grotesk', sans-serif",
+            fontSize: 36,
+            fontWeight: 600,
+            color: "#FFFFFF",
+            background: "rgba(0,0,0,0.5)",
+            borderRadius: 16,
+            padding: "8px 24px",
+            textShadow: "0 2px 8px rgba(0,0,0,0.8)",
+          }}
+        >
+          🔊 sound on!
+        </div>
+
+        {/* Main hook text — trending search term */}
         <div
           style={{
             fontFamily: "'Space Grotesk', sans-serif",

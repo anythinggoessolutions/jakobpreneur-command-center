@@ -438,34 +438,7 @@ async function ffmpegAssemble(
     rawConcat,
   ]);
 
-  // Mix in the GodText intro sound at the very start of the video.
-  // The intro plays over the hook frame (~4s), fades out, then silence.
-  // Video audio (silent from anullsrc) is preserved so the music step
-  // can layer on top without issues.
   let baseVideo = rawConcat;
-  if (introAudioPath) {
-    try {
-      const withIntro = path.join(jobDir, "with-intro.mp4");
-      await execAsync(FFMPEG, [
-        "-y",
-        "-i", rawConcat,
-        "-i", introAudioPath,
-        "-filter_complex",
-        // Boost intro to max volume, NO fade — play the full clip including
-        // the gun-cock sound at the end, then cut straight to messages
-        "[1:a]volume=3.0,loudnorm=I=-14:TP=-1:LRA=7[intro];" +
-          "[0:a][intro]amix=inputs=2:duration=first:dropout_transition=0[a]",
-        "-map", "0:v",
-        "-map", "[a]",
-        "-c:v", "copy",
-        "-c:a", "aac", "-ar", "44100",
-        withIntro,
-      ], { timeout: 60000 });
-      baseVideo = withIntro;
-    } catch (err) {
-      console.warn("[Video Build] Failed to mix intro audio:", err);
-    }
-  }
 
   if (musicPath) {
     const probeResult = await execAsync(FFPROBE, [
