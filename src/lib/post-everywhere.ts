@@ -74,16 +74,25 @@ function pick<T>(arr: readonly T[]): T {
 // 3-5 total per post — algorithm penalizes too many.
 const ALWAYS_TAGS = ["#rizz"];
 const ROTATING_TAGS = [
-  "#rizzler",
-  "#rizzking",
-  "#textgame",
+  // High volume + rising from TikTok search insights (Jun 2026)
+  "#textingagirl",
+  "#rizzlines",
+  "#textingrizz",
+  "#rizzontex",
   "#pickuplines",
-  "#datingadvice",
+  "#datinghumor",
+  "#texttok",
   "#rizzgod",
-  "#texting",
-  "#situationships",
-  "#moderndating",
+  "#textgame",
+  "#howtorizz",
   "#datingtips",
+  "#rizztutorial",
+  "#rizzdms",
+  "#moderndating",
+  "#datingtrends",
+  "#texting",
+  "#rizzking",
+  "#rizzler",
 ];
 
 function pickN<T>(arr: readonly T[], n: number): T[] {

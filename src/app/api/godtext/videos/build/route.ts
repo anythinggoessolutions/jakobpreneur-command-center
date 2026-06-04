@@ -47,6 +47,7 @@ type ConversationMsg = {
 type Conversation = {
   platform: string;
   hookText: string;
+  hookVoiceover?: string;
   womanName?: string;
   messages: ConversationMsg[];
 };
@@ -386,8 +387,25 @@ async function ffmpegAssemble(
           outVid,
         ]);
       }
+    } else if (hasCommentary) {
+      // Video segment with hook voiceover — mix commentary audio in
+      await execAsync(FFMPEG, [
+        "-y", "-i", seg.path,
+        "-i", seg.commentaryAudio!,
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-filter_complex",
+        `[1:a]aresample=44100,volume=2.5,loudnorm=I=-14:TP=-1:LRA=7,apad=whole_dur=30[vo];` +
+          `[vo]atrim=0:30[vopad]`,
+        "-map", "0:v:0", "-map", "[vopad]",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", String(FPS),
+        "-vf",
+        `scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=decrease,pad=${FRAME_W}:${FRAME_H}:(ow-iw)/2:(oh-ih)/2:black`,
+        "-c:a", "aac", "-ar", "44100", "-ac", "2",
+        "-shortest", "-preset", "fast", "-crf", "18",
+        outVid,
+      ]);
     } else {
-      // Video segment — always silent (hype clips have their own audio stripped)
+      // Video segment — silent
       await execAsync(FFMPEG, [
         "-y", "-i", seg.path,
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
@@ -556,6 +574,28 @@ async function buildVideo(
     // If no baddie available, falls back to hook video or static screen.
     // "this is who we're rizzing today" intro feel — baddie + hook in one shot.
     // ---------------------------------------------------------------
+    // Generate hook voiceover TTS if the conversation has one
+    let hookVoiceoverPath: string | null = null;
+    let hookDuration = 4.0; // default hook frame length
+    if (conversation.hookVoiceover) {
+      try {
+        hookVoiceoverPath = path.join(jobDir, "hook-voiceover.mp3");
+        await generateCommentaryAudio(conversation.hookVoiceover, hookVoiceoverPath);
+        // Measure the voiceover duration so the hook frame is long enough
+        const probeRes = await execAsync(FFPROBE, [
+          "-v", "error", "-show_entries", "format=duration",
+          "-of", "default=noprint_wrappers=1:nokey=1", hookVoiceoverPath,
+        ]);
+        const voDur = parseFloat(probeRes.stdout.trim()) || 0;
+        // Hook frame = max of default 4s or voiceover + 0.5s buffer
+        hookDuration = Math.max(4.0, voDur + 0.5);
+        console.log(`[Video Build] Hook voiceover: ${voDur.toFixed(1)}s → frame ${hookDuration.toFixed(1)}s`);
+      } catch (err) {
+        console.warn("[Video Build] Failed to generate hook voiceover:", err);
+        hookVoiceoverPath = null;
+      }
+    }
+
     if (unusedBaddies.length > 0) {
       // Baddie-as-hook: download baddie photo, overlay hook text on it
       const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
@@ -563,12 +603,11 @@ async function buildVideo(
       await downloadFile(baddie.url, baddieDlPath);
       await markBaddieUsed(baddie.id);
 
-      // Render branded hook text overlay on green-screen
-      // Baddie intro always says "Texting huzz / Take notes"
+      // Render hook text overlay — uses the conversation's hookText (trending search terms)
       const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
       await screenshotFrame(page, baseUrl, hookOverlayPath, {
         type: "hook-overlay",
-        hook: "Texting huzz\n*Take notes*",
+        hook: conversation.hookText || "Texting huzz\n*Take notes*",
       });
 
       // Compose: baddie photo full-screen (full color) + text overlay
@@ -586,7 +625,12 @@ async function buildVideo(
         "-frames:v", "1",
         hookFramePath,
       ]);
-      segments.push({ kind: "image", path: hookFramePath, duration: 4.0 });
+      segments.push({
+        kind: "image",
+        path: hookFramePath,
+        duration: hookDuration,
+        ...(hookVoiceoverPath ? { commentaryAudio: hookVoiceoverPath } : {}),
+      });
       frameIdx++;
     } else if (hookBgUrls.length > 0) {
       // Fallback: hook video background + text overlay (no baddie available)
@@ -605,7 +649,7 @@ async function buildVideo(
         "-y",
         "-stream_loop", "-1", "-i", hookBgPath,
         "-loop", "1", "-i", hookOverlayPath,
-        "-t", "4",
+        "-t", String(hookDuration),
         "-filter_complex",
         `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=increase,crop=${FRAME_W}:${FRAME_H},` +
         `drawbox=x=0:y=0:w=${FRAME_W}:h=${FRAME_H}:color=black@0.4:t=fill[bg];` +
@@ -615,7 +659,11 @@ async function buildVideo(
         "-an", "-preset", "fast", "-crf", "18",
         hookOutPath,
       ]);
-      segments.push({ kind: "video", path: hookOutPath });
+      segments.push({
+        kind: "video",
+        path: hookOutPath,
+        ...(hookVoiceoverPath ? { commentaryAudio: hookVoiceoverPath } : {}),
+      });
       frameIdx++;
     } else {
       // Last fallback: static hook screenshot
@@ -624,7 +672,12 @@ async function buildVideo(
         type: "hook",
         hook: conversation.hookText,
       });
-      segments.push({ kind: "image", path: hookPath, duration: TIMING.hook });
+      segments.push({
+        kind: "image",
+        path: hookPath,
+        duration: hookDuration,
+        ...(hookVoiceoverPath ? { commentaryAudio: hookVoiceoverPath } : {}),
+      });
       frameIdx++;
     }
 
@@ -760,6 +813,8 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  // Chrome Private Network Access: allow HTTPS sites to call localhost
+  "Access-Control-Allow-Private-Network": "true",
 };
 
 export async function OPTIONS() {

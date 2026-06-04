@@ -35,7 +35,20 @@ export const GodTextConversationSchema = z.object({
   hookText: z
     .string()
     .describe(
-      "The cold-open text overlay (1 line, all-lowercase punchy hook in the style of viral rizz TikToks).",
+      "Short text overlay shown on screen during the hook frame. Should reference the specific scenario — e.g. 'texting a girl from hinge', 'rizz on text', 'she left me on read'. Pulled from trending TikTok search terms. All lowercase, no punctuation, 3-6 words max.",
+    ),
+  hookVoiceover: z
+    .string()
+    .describe(
+      "British narrator voiceover that plays over the hook frame. 2 sentences: first is a hype/funny setup line about what's about to happen, second is ALWAYS a follow CTA. " +
+      "Must be contextual to this specific conversation scenario. " +
+      "Style: BBC narrator watching a trainwreck unfold. Dry, confident, slightly amused. Mild UK cursing allowed (bloody, taking the piss, bin him off). " +
+      "MUST end with one of these follow CTAs (pick randomly): " +
+      "'Follow for more AI rizz.' / 'Follow to keep up with the rizz.' / 'Follow before your ex does.' / " +
+      "'Follow for daily rizz upgrades.' / 'Follow if your texts need saving.' / 'Follow to stop fumbling.' / " +
+      "'Follow for more dangerous rizz.' / 'Follow before you get left on read.' / 'Follow for more GodText plays.' / " +
+      "'Follow to watch AI do the flirting.' " +
+      "Example full line: 'Watch this bloke use AI to pull a girl way out of his league. Follow to keep up with the rizz.'",
     ),
   messages: z
     .array(
@@ -101,11 +114,33 @@ Escalation rules:
 - Start at "low" (one-word or short response), climb through "medium" and "high"
 - Final woman message MUST be "maximum"
 
-Hook text rules:
-- 1 line, all-lowercase, punchy, viral-style
-- Examples: "letting godtext cook on hinge", "she wasn't ready for this AI", "godtext went CRAZY on this one"
-- Emojis allowed, max 1
-- NEVER mention JakobPreneur, the developer, or any other brand. GodText AI is the only brand referenced.
+Hook text rules (the TEXT overlay on screen):
+- Short, lowercase, no punctuation, 3-6 words max
+- Should reference the specific scenario using trending TikTok search terms
+- Examples: "texting a girl from hinge", "rizz on text", "she left me on read", "how to rizz up on text", "texting her back", "AI rizz tutorial", "dry texts fixed by AI"
+- No emojis, no brand mentions — just the scenario in search-friendly language
+- NEVER mention JakobPreneur, the developer, or any other brand.
+
+Hook voiceover rules (the SPOKEN narration over the hook frame):
+- British narrator (same character as the commentary) hypes up what's about to happen
+- 2 sentences: setup line + follow CTA
+- Setup line is contextual to this specific scenario — reference what's about to happen
+- Must sound natural spoken aloud by a British man, not written
+- Mild UK cursing encouraged (bloody, taking the piss, bin him off, etc.)
+- ALWAYS ends with a follow CTA picked randomly from the approved list
+- Style reference — these are the approved tone/format:
+  * "Right then, watch this bloke use AI to pull a girl way out of his league."
+  * "She left him on read. Big mistake, apparently."
+  * "This lad's got the chat skills of a brick. Good thing he's got AI."
+  * "Watch AI turn this absolute disaster into a date."
+  * "This might be the most disrespectful amount of rizz I've ever seen."
+  * "He couldn't pull a door open. Watch this."
+  * "This bloke outsourced his personality to AI and somehow it worked."
+  * "The scary bit is how well this actually works."
+  * "She was ready to bin him off. Then this happened."
+  * "Honestly, this should probably be illegal."
+  * "This girl thought she had the upper hand. Bless her."
+- Generate a NEW line each time that fits the specific scenario. Don't copy these exactly — match the vibe.
 
 Platform rule — CRITICAL:
 - You MUST rotate across all four platforms evenly: Hinge, Instagram, Tinder, iMessage.
