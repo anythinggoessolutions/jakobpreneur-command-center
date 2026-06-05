@@ -251,12 +251,13 @@ export default function TypingSimulation({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Hook text overlay — stays on screen the entire time */}
+      {/* Hook text overlay — centered in safe zone, stays on screen the entire time */}
       {hookText && (
         <div
           style={{
             position: "absolute",
-            top: 480,
+            top: 250,
+            bottom: 1920 - 1520,
             left: 80,
             right: 80,
             display: "flex",
@@ -327,7 +328,7 @@ export default function TypingSimulation({
             overflow: "hidden",
           }}
         >
-          {typingText || s.label}
+          {typingText ? renderBlurred(typingText) : s.label}
           {typingText && (
             <span
               style={{
@@ -403,9 +404,31 @@ function MessageBubble({
           lineHeight: 1.35,
         }}
       >
-        {msg.text}
+        {renderBlurred(msg.text)}
       </div>
     </div>
+  );
+}
+
+function renderBlurred(text: string) {
+  const phoneRegex = /(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/g;
+  const parts = text.split(phoneRegex);
+  if (parts.length === 1) return text;
+  return (
+    <>
+      {parts.map((part, i) =>
+        phoneRegex.test(part) ? (
+          <span
+            key={i}
+            style={{ filter: "blur(12px)", userSelect: "none", display: "inline" }}
+          >
+            {part}
+          </span>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 
