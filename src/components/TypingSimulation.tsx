@@ -80,12 +80,14 @@ export default function TypingSimulation({
   messages,
   hookText,
   platform = "iMessage",
+  avatarUrl,
   onDone,
   autoStart = false,
 }: {
   messages: ChatMessage[];
   hookText?: string;
   platform?: string;
+  avatarUrl?: string;
   onDone?: () => void;
   autoStart?: boolean;
 }) {
@@ -216,17 +218,30 @@ export default function TypingSimulation({
       >
         <div
           style={{
-            width: 60,
-            height: 60,
-            borderRadius: 30,
+            width: 80,
+            height: 80,
+            borderRadius: 40,
             background: "linear-gradient(135deg, #7B7B7D, #5A5A5C)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             marginBottom: 4,
+            overflow: "hidden",
           }}
         >
-          <span style={{ fontSize: 28, color: "#fff" }}>👩</span>
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt=""
+              style={{
+                width: 80,
+                height: 80,
+                objectFit: "cover",
+              }}
+            />
+          ) : (
+            <span style={{ fontSize: 36, color: "#fff" }}>👩</span>
+          )}
         </div>
         <span style={{ color: s.headerText, fontSize: 24, fontWeight: 600 }}>
           {s.label}

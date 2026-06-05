@@ -108,11 +108,13 @@ export default function RenderFrame() {
     } catch { /* ignore */ }
     const hook = params.get("hook") || undefined;
     const plat = params.get("platform") || "iMessage";
+    const avatar = params.get("avatar") || undefined;
     return (
       <TypingSimulation
         messages={msgs}
         hookText={hook}
         platform={plat}
+        avatarUrl={avatar}
         autoStart
       />
     );

@@ -83,6 +83,31 @@ async function uploadToBlob(
   return data.url;
 }
 
+async function fetchRandomBaddieUrl(): Promise<string | null> {
+  const base = process.env.AIRTABLE_BASE_ID;
+  if (!base) return null;
+  const url = new URL(
+    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
+  );
+  const res = await fetch(url.toString(), {
+    headers: airtableHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const urls = (data.records || [])
+    .map(
+      (r: { fields: Record<string, unknown> }) =>
+        r.fields["Image URL"] as string,
+    )
+    .filter(
+      (u: unknown): u is string =>
+        typeof u === "string" && (u as string).length > 0,
+    );
+  if (urls.length === 0) return null;
+  return urls[Math.floor(Math.random() * urls.length)];
+}
+
 type ConversationMsg = {
   sender: "man" | "woman";
   text: string;
@@ -150,8 +175,11 @@ export async function POST(req: NextRequest) {
       `[Typing Build] ${conversation.messages.length} messages, est ${estimatedSec}s`,
     );
 
-    // Fetch music in parallel with browser setup
-    const [musicUrl] = await Promise.all([fetchRandomMusicUrl()]);
+    // Fetch music and baddie avatar in parallel
+    const [musicUrl, avatarUrl] = await Promise.all([
+      fetchRandomMusicUrl(),
+      fetchRandomBaddieUrl(),
+    ]);
     let musicPath: string | null = null;
     if (musicUrl) {
       musicPath = path.join(jobDir, "music.mp3");
@@ -183,6 +211,9 @@ export async function POST(req: NextRequest) {
     renderUrl.searchParams.set("platform", conversation.platform || "iMessage");
     if (conversation.hookText) {
       renderUrl.searchParams.set("hook", conversation.hookText);
+    }
+    if (avatarUrl) {
+      renderUrl.searchParams.set("avatar", avatarUrl);
     }
 
     // Launch Playwright with video recording
