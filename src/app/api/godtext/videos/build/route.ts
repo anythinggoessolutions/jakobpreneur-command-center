@@ -106,16 +106,11 @@ async function fetchHookBackgrounds(): Promise<string[]> {
 
 type BaddiePhoto = { id: string; url: string };
 
-async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
+async function fetchBaddiePhotos(): Promise<BaddiePhoto[]> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return [];
   const url = new URL(
     `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
-  );
-  // Only fetch photos that haven't been used yet
-  url.searchParams.set(
-    "filterByFormula",
-    'OR({Used Count} = 0, {Used Count} = BLANK())',
   );
   const res = await fetch(url.toString(), {
     headers: airtableHeaders(),
@@ -129,19 +124,6 @@ async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
       id: r.id,
       url: r.fields["Image URL"] as string,
     }));
-}
-
-async function markBaddieUsed(recordId: string): Promise<void> {
-  const base = process.env.AIRTABLE_BASE_ID;
-  if (!base) return;
-  await fetch(
-    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}/${recordId}`,
-    {
-      method: "PATCH",
-      headers: airtableHeaders(),
-      body: JSON.stringify({ fields: { "Used Count": 1 } }),
-    },
-  );
 }
 
 async function fetchIntroAudioUrl(): Promise<string | null> {
@@ -494,7 +476,7 @@ async function buildVideo(
     fetchRandomMusicUrl(),
     fetchIntroAudioUrl(),
     fetchHookBackgrounds(),
-    fetchUnusedBaddiePhotos(),
+    fetchBaddiePhotos(),
   ]);
 
   // Download music if available
@@ -574,7 +556,6 @@ async function buildVideo(
       const baddie = unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
       const baddieDlPath = path.join(jobDir, `baddie-${frameIdx}.jpg`);
       await downloadFile(baddie.url, baddieDlPath);
-      await markBaddieUsed(baddie.id);
 
       // Render hook text overlay — uses the conversation's hookText (trending search terms)
       const hookOverlayPath = path.join(jobDir, `hook-overlay-${frameIdx}.png`);
@@ -828,10 +809,6 @@ export async function POST(req: NextRequest) {
 
     await fs.mkdir(jobDir, { recursive: true });
 
-    // Check how many unused baddies remain BEFORE building (build will use one)
-    const unusedBefore = await fetchUnusedBaddiePhotos();
-    const baddiesRemaining = Math.max(0, unusedBefore.length - 1); // minus the one this build will use
-
     // Build the video
     const videoPath = await buildVideo(
       conversation,
@@ -843,15 +820,8 @@ export async function POST(req: NextRequest) {
     const filename = `godtext-videos/${path.basename(videoPath)}`;
     const blobUrl = await uploadToBlob(videoPath, filename);
 
-    const warnings: string[] = [];
-    if (baddiesRemaining === 0) {
-      warnings.push("No baddie photos left! Ask Claude to generate more.");
-    } else if (baddiesRemaining <= 5) {
-      warnings.push(`Only ${baddiesRemaining} baddie photos remaining — time to generate more soon.`);
-    }
-
     return NextResponse.json(
-      { videoUrl: blobUrl, baddiesRemaining, warnings },
+      { videoUrl: blobUrl },
       { headers: CORS_HEADERS },
     );
   } catch (err: unknown) {

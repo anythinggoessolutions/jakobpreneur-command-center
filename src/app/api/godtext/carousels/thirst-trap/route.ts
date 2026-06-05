@@ -35,34 +35,7 @@ type BaddiePhoto = { id: string; url: string };
 // Vault fetchers
 // ---------------------------------------------------------------------------
 
-async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
-  const base = process.env.AIRTABLE_BASE_ID;
-  if (!base) return [];
-  const url = new URL(
-    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
-  );
-  url.searchParams.set(
-    "filterByFormula",
-    'OR({Used Count} = 0, {Used Count} = BLANK())',
-  );
-  const res = await fetch(url.toString(), {
-    headers: airtableHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.records || [])
-    .filter(
-      (r: { id: string; fields: Record<string, unknown> }) =>
-        r.fields["Image URL"],
-    )
-    .map((r: { id: string; fields: Record<string, unknown> }) => ({
-      id: r.id,
-      url: r.fields["Image URL"] as string,
-    }));
-}
-
-async function fetchAllBaddiePhotos(): Promise<BaddiePhoto[]> {
+async function fetchBaddiePhotos(): Promise<BaddiePhoto[]> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return [];
   const url = new URL(
@@ -208,12 +181,8 @@ async function buildThirstTrapCarousel(
     `[Thirst Trap] Generated ${content.slides.length} slides, topic: "${content.topic}"`,
   );
 
-  // 2. Fetch baddie photos — use unused first, fall back to all
-  let baddies = await fetchUnusedBaddiePhotos();
-  if (baddies.length < content.slides.length) {
-    // Not enough unused — pull from all baddies (reuse is fine for marketing carousels)
-    baddies = await fetchAllBaddiePhotos();
-  }
+  // 2. Fetch baddie photos
+  const baddies = await fetchBaddiePhotos();
 
   if (baddies.length === 0) {
     throw new Error(
@@ -317,6 +286,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Private-Network": "true",
 };
 
 export async function OPTIONS() {
@@ -340,7 +310,6 @@ export async function POST(_req: NextRequest) {
         slideUrls: result.slideUrls,
         topic: result.topic,
         slideCount: result.slideCount,
-        warnings: [],
       },
       { headers: CORS_HEADERS },
     );

@@ -38,14 +38,12 @@ export default function GodTextAIPage() {
     outputPath: string;
     durationSeconds: number;
     frameCount: number;
-    warnings: string[];
     videoUrl?: string;
   } | null>(null);
   const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
   const [buildFormat, setBuildFormat] = useState<"video" | "carousel">("video");
   const [carouselResult, setCarouselResult] = useState<{
     slideUrls: string[];
-    warnings: string[];
   } | null>(null);
   const [cookingPreview, setCookingPreview] = useState<"off" | "white-cooking" | "white-reveal" | "dark-cooking" | "dark-reveal">("off");
   const [savedScripts, setSavedScripts] = useState<
@@ -196,7 +194,6 @@ export default function GodTextAIPage() {
 
         setCarouselResult({
           slideUrls: data.slideUrls || [],
-          warnings: data.warnings || [],
         });
       } else {
         const buildUrl = isLocal
@@ -217,7 +214,6 @@ export default function GodTextAIPage() {
           outputPath: "",
           durationSeconds: 0,
           frameCount: 0,
-          warnings: data.warnings || [],
           videoUrl: data.videoUrl,
         });
       }
@@ -709,14 +705,6 @@ export default function GodTextAIPage() {
                   Carousel ready! {carouselResult.slideUrls.length} slides
                 </div>
 
-                {carouselResult.warnings.length > 0 && (
-                  <div className="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                    {carouselResult.warnings.map((w, i) => (
-                      <div key={i}>{w}</div>
-                    ))}
-                  </div>
-                )}
-
                 {/* Slide preview — horizontal scroll */}
                 <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
                   {carouselResult.slideUrls.map((url, i) => (
@@ -855,14 +843,6 @@ export default function GodTextAIPage() {
                 <div className="font-semibold text-green-800 mb-2">
                   Video ready! 🎬
                 </div>
-
-                {videoResult.warnings.length > 0 && (
-                  <div className="mb-2 text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
-                    {videoResult.warnings.map((w, i) => (
-                      <div key={i}>{w}</div>
-                    ))}
-                  </div>
-                )}
 
                 <div className="flex flex-wrap items-center gap-2">
                   <a

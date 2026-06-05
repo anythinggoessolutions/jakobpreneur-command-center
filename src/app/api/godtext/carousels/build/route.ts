@@ -71,15 +71,11 @@ async function fetchHypeClips(): Promise<HypeClip[]> {
     }));
 }
 
-async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
+async function fetchBaddiePhotos(): Promise<BaddiePhoto[]> {
   const base = process.env.AIRTABLE_BASE_ID;
   if (!base) return [];
   const url = new URL(
     `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}`,
-  );
-  url.searchParams.set(
-    "filterByFormula",
-    'OR({Used Count} = 0, {Used Count} = BLANK())',
   );
   const res = await fetch(url.toString(), {
     headers: airtableHeaders(),
@@ -93,19 +89,6 @@ async function fetchUnusedBaddiePhotos(): Promise<BaddiePhoto[]> {
       id: r.id,
       url: r.fields["Image URL"] as string,
     }));
-}
-
-async function markBaddieUsed(recordId: string): Promise<void> {
-  const base = process.env.AIRTABLE_BASE_ID;
-  if (!base) return;
-  await fetch(
-    `${AIRTABLE_API}/${base}/${encodeURIComponent("GodText Baddie Photos")}/${recordId}`,
-    {
-      method: "PATCH",
-      headers: airtableHeaders(),
-      body: JSON.stringify({ fields: { "Used Count": 1 } }),
-    },
-  );
 }
 
 async function downloadFile(url: string, dest: string): Promise<void> {
@@ -252,7 +235,7 @@ async function buildCarousel(
 
   const [hypeClips, unusedBaddies] = await Promise.all([
     fetchHypeClips(),
-    fetchUnusedBaddiePhotos(),
+    fetchBaddiePhotos(),
   ]);
 
   // Warm up the render page
@@ -285,7 +268,6 @@ async function buildCarousel(
         unusedBaddies[Math.floor(Math.random() * unusedBaddies.length)];
       const baddieDlPath = path.join(jobDir, `baddie-${slideIdx}.jpg`);
       await downloadFile(baddie.url, baddieDlPath);
-      await markBaddieUsed(baddie.id);
 
       const hookOverlayPath = path.join(
         jobDir,
@@ -425,6 +407,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Private-Network": "true",
 };
 
 export async function OPTIONS() {
@@ -454,9 +437,6 @@ export async function POST(req: NextRequest) {
 
     await fs.mkdir(jobDir, { recursive: true });
 
-    const unusedBefore = await fetchUnusedBaddiePhotos();
-    const baddiesRemaining = Math.max(0, unusedBefore.length - 1);
-
     // Build the carousel slides
     const slidePaths = await buildCarousel(
       conversation,
@@ -472,17 +452,8 @@ export async function POST(req: NextRequest) {
       slideUrls.push(url);
     }
 
-    const warnings: string[] = [];
-    if (baddiesRemaining === 0) {
-      warnings.push("No baddie photos left! Ask Claude to generate more.");
-    } else if (baddiesRemaining <= 5) {
-      warnings.push(
-        `Only ${baddiesRemaining} baddie photos remaining — time to generate more soon.`,
-      );
-    }
-
     return NextResponse.json(
-      { slideUrls, slideCount: slideUrls.length, baddiesRemaining, warnings },
+      { slideUrls, slideCount: slideUrls.length },
       { headers: CORS_HEADERS },
     );
   } catch (err: unknown) {
