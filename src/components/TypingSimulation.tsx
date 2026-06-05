@@ -248,12 +248,12 @@ export default function TypingSimulation({
         </span>
       </div>
 
-      {/* Messages area — justify to bottom so messages start near keyboard and push up */}
+      {/* Messages area — safe zone padded, justify to bottom */}
       <div
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "20px 32px",
+          padding: "20px 80px",
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-end",
