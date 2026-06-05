@@ -266,13 +266,12 @@ export default function TypingSimulation({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Hook text overlay — centered in safe zone, stays on screen the entire time */}
+      {/* Hook text overlay — bottom of safe zone, above keyboard */}
       {hookText && (
         <div
           style={{
             position: "absolute",
-            top: 250,
-            bottom: 1920 - 1520,
+            bottom: 520,
             left: 80,
             right: 80,
             display: "flex",
