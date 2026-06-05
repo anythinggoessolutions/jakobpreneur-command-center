@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listRecords, createRecord } from "@/lib/airtable";
-import { generateGodTextConversation } from "@/lib/godtext-script-generator";
+import { generateGodTextConversation, pickHook } from "@/lib/godtext-script-generator";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
       (a, b) => platformCounts[a] - platformCounts[b],
     );
     let platformQueueIdx = 0;
+    const usedHooks: string[] = [];
 
     // Generate sequentially so a transient API blip on one doesn't blow
     // away the whole batch (failures are per-iteration). Each iteration
@@ -105,10 +106,15 @@ export async function POST(req: NextRequest) {
         const nextPlatform = platformQueue[platformQueueIdx % platformQueue.length];
         platformQueueIdx++;
 
+        // Pick a hook from the bank — different one per script in the batch
+        const hook = pickHook(usedHooks);
+        usedHooks.push(hook);
+
         const conversation = await generateGodTextConversation(shuffled, {
           scenarioHint,
           platformHint: platformHint || nextPlatform,
           excludeNames: usedNames.length > 0 ? usedNames : undefined,
+          hookText: hook,
         });
 
         // Persist the script for Phase B + the UI's "Generated Scripts" list.

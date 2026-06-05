@@ -172,9 +172,73 @@ Commentator voiceover rules:
  * will drop. The route surfaces a warning to the user when the vault is
  * empty.
  */
+// Hook bank — curated scroll-stoppers designed to grab attention in 1-2 seconds.
+// Short, lowercase, punchy. The script generator picks one and builds the
+// conversation around it.
+const HOOK_BANK = [
+  // Curiosity gap
+  "she wasn't ready for this text",
+  "the text that changed everything",
+  "watch her go from dry to obsessed",
+  "this opener has a 100% reply rate",
+  "she unmatched everyone else after this",
+  "the message she screenshots to her friends",
+  "she thought he was joking at first",
+  "plot twist she gave her number",
+  "he said one thing and she folded",
+  "the text she'll never forget",
+  // Bold claims
+  "rizz so good it should be illegal",
+  "AI wrote this and she had no idea",
+  "this is why she texts back in 2 seconds",
+  "not patched yet (hurry)",
+  "the text her friends screenshot",
+  "she called her friend mid-convo",
+  "his thumbs aren't that fast",
+  "this shouldn't work but it does",
+  "too smooth to be real",
+  // Relatable scenarios
+  "texting your crush when you're nervous",
+  "when she's being dry and you flip it",
+  "first text after getting her number",
+  "recovering after being left on read",
+  "turning friend zone into a date",
+  "when she tests you and you pass",
+  "texting her back after she ghosted",
+  "making her laugh through text",
+  "the perfect follow up text",
+  "cold dm that actually worked",
+  // Challenge / controversy
+  "girls hate when guys text like this",
+  "your bf could never text like this",
+  "why are guys still texting wyd",
+  "this is cheating and idc",
+  "she said no guy texts like this",
+  "her ex could never",
+  "she showed her friends and they all want one",
+  // Urgency / trending
+  "POV you downloaded the rizz app",
+  "the app tinder doesn't want you to know",
+  "texting hack going viral rn",
+  "save this before it's patched",
+  "before this gets taken down",
+  "the rizz cheat code",
+  "AI rizz on ig dms",
+  "AI rizz on tinder",
+  "AI rizz on hinge",
+  "how to rizz ur crush (not patched)",
+  "how to never get left on read again",
+];
+
+export function pickHook(exclude: string[] = []): string {
+  const available = HOOK_BANK.filter((h) => !exclude.includes(h));
+  const pool = available.length > 0 ? available : HOOK_BANK;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export async function generateGodTextConversation(
   referenceImageUrls: string[] = [],
-  options: { scenarioHint?: string; platformHint?: string; excludeNames?: string[] } = {},
+  options: { scenarioHint?: string; platformHint?: string; excludeNames?: string[]; hookText?: string } = {},
 ): Promise<GodTextConversation> {
   // Cap image references to avoid blowing past the request size limit.
   // 6 images is plenty for stylistic transfer; more burns tokens for
@@ -197,6 +261,11 @@ export async function generateGodTextConversation(
   }
 
   const hintParts: string[] = [];
+  if (options.hookText) {
+    hintParts.push(
+      `MANDATORY HOOK TEXT: You MUST use exactly "${options.hookText}" as the hookText field. Do NOT change it. Build the entire conversation scenario around this hook — the conversation should deliver on what the hook promises.`
+    );
+  }
   if (options.scenarioHint) hintParts.push(`Scenario hint: ${options.scenarioHint}`);
   if (options.platformHint) {
     hintParts.push(
