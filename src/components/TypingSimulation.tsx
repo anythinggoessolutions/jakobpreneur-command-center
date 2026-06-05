@@ -10,7 +10,65 @@ type ChatMessage = {
   text: string;
 };
 
-// iOS keyboard layout
+type PlatformStyle = {
+  appBg: string;
+  headerText: string;
+  manBubble: string;
+  manText: string;
+  womanBubble: string;
+  womanText: string;
+  accent: string;
+  fontFamily: string;
+  label: string;
+};
+
+const PLATFORM_STYLES: Record<string, PlatformStyle> = {
+  Hinge: {
+    appBg: "#1A1A2E",
+    headerText: "#FFFFFF",
+    manBubble: "#4F2B7A",
+    manText: "#FFFFFF",
+    womanBubble: "rgba(255,255,255,0.12)",
+    womanText: "#FFFFFF",
+    accent: "#4F2B7A",
+    fontFamily: '"Helvetica Neue", -apple-system, system-ui, sans-serif',
+    label: "Hinge",
+  },
+  Instagram: {
+    appBg: "#000000",
+    headerText: "#FFFFFF",
+    manBubble: "linear-gradient(135deg,#9b3cd6 0%,#ed4956 50%,#f6a23c 100%)",
+    manText: "#FFFFFF",
+    womanBubble: "#262626",
+    womanText: "#FFFFFF",
+    accent: "#ED4956",
+    fontFamily: '"Helvetica Neue", -apple-system, system-ui, sans-serif',
+    label: "Instagram",
+  },
+  Tinder: {
+    appBg: "#1A1A2E",
+    headerText: "#FFFFFF",
+    manBubble: "linear-gradient(135deg,#FE3C72 0%,#FF655B 100%)",
+    manText: "#FFFFFF",
+    womanBubble: "rgba(255,255,255,0.12)",
+    womanText: "#FFFFFF",
+    accent: "#FE3C72",
+    fontFamily: '"Helvetica Neue", -apple-system, system-ui, sans-serif',
+    label: "Tinder",
+  },
+  iMessage: {
+    appBg: "#000000",
+    headerText: "#FFFFFF",
+    manBubble: "#0B84FE",
+    manText: "#FFFFFF",
+    womanBubble: "#26252A",
+    womanText: "#FFFFFF",
+    accent: "#0B84FE",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+    label: "iMessage",
+  },
+};
+
 const KB_ROWS = [
   ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
   ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
@@ -21,21 +79,22 @@ const KB_ROWS = [
 export default function TypingSimulation({
   messages,
   hookText,
+  platform = "iMessage",
   onDone,
   autoStart = false,
 }: {
   messages: ChatMessage[];
   hookText?: string;
+  platform?: string;
   onDone?: () => void;
   autoStart?: boolean;
 }) {
+  const s = PLATFORM_STYLES[platform] || PLATFORM_STYLES.iMessage;
   const [sentMessages, setSentMessages] = useState<ChatMessage[]>([]);
   const [typingText, setTypingText] = useState("");
   const [activeKey, setActiveKey] = useState<string | null>(null);
-  const [currentSender, setCurrentSender] = useState<"man" | "woman">("man");
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const [started, setStarted] = useState(false);
-  const [showHook, setShowHook] = useState(!!hookText);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const doneRef = useRef(false);
 
@@ -49,13 +108,10 @@ export default function TypingSimulation({
 
   useEffect(() => {
     if (autoStart && !started) {
-      const t = setTimeout(() => {
-        setShowHook(false);
-        setStarted(true);
-      }, hookText ? 2500 : 100);
+      const t = setTimeout(() => setStarted(true), 500);
       return () => clearTimeout(t);
     }
-  }, [autoStart, started, hookText]);
+  }, [autoStart, started]);
 
   useEffect(() => {
     if (!started || doneRef.current) return;
@@ -66,10 +122,8 @@ export default function TypingSimulation({
       for (let msgIdx = 0; msgIdx < messages.length; msgIdx++) {
         if (cancelled) return;
         const msg = messages[msgIdx];
-        setCurrentSender(msg.sender);
 
         if (msg.sender === "woman") {
-          // Woman's messages: show typing indicator, then message appears
           setShowTypingIndicator(true);
           await wait(800 + Math.random() * 600);
           if (cancelled) return;
@@ -77,25 +131,22 @@ export default function TypingSimulation({
           setSentMessages((prev) => [...prev, msg]);
           await wait(400);
         } else {
-          // Man's messages: type character by character with key highlights
+          // Type character by character — text only shows in input field
           const text = msg.text;
           for (let charIdx = 0; charIdx < text.length; charIdx++) {
             if (cancelled) return;
             const char = text[charIdx];
-            const keyToHighlight = char.toLowerCase();
-            setActiveKey(keyToHighlight);
+            setActiveKey(char.toLowerCase());
             setTypingText(text.slice(0, charIdx + 1));
-            // Vary typing speed for realism
             const delay = char === " " ? 60 : 40 + Math.random() * 50;
             await wait(delay);
           }
           if (cancelled) return;
           setActiveKey(null);
-          // Brief pause before "sending"
           await wait(300);
-          // Hit send
+          // Hit send — message bubble appears NOW
           setActiveKey("send");
-          await wait(150);
+          await wait(200);
           setActiveKey(null);
           setSentMessages((prev) => [...prev, msg]);
           setTypingText("");
@@ -105,9 +156,7 @@ export default function TypingSimulation({
 
       if (!cancelled) {
         doneRef.current = true;
-        // Hold the final state for a moment
         await wait(1500);
-        // Signal to Playwright that the animation is done
         (window as unknown as Record<string, boolean>).__typingDone = true;
         onDone?.();
       }
@@ -119,48 +168,17 @@ export default function TypingSimulation({
     };
   }, [started, messages, onDone]);
 
-  if (showHook && hookText) {
-    return (
-      <div
-        style={{
-          width: FRAME_W,
-          height: FRAME_H,
-          background: "#000",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          fontFamily:
-            '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
-        }}
-      >
-        <div
-          style={{
-            fontSize: 72,
-            fontWeight: 700,
-            color: "#fff",
-            textAlign: "center",
-            lineHeight: 1.2,
-            padding: "0 80px",
-          }}
-        >
-          {hookText}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div
       style={{
         width: FRAME_W,
         height: FRAME_H,
-        background: "#000",
+        background: s.appBg,
         display: "flex",
         flexDirection: "column",
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif',
+        fontFamily: s.fontFamily,
         overflow: "hidden",
+        position: "relative",
       }}
     >
       {/* Status bar */}
@@ -184,7 +202,7 @@ export default function TypingSimulation({
         </div>
       </div>
 
-      {/* iMessage header */}
+      {/* Platform header */}
       <div
         style={{
           height: 110,
@@ -192,7 +210,7 @@ export default function TypingSimulation({
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "column",
-          borderBottom: "1px solid #1C1C1E",
+          borderBottom: "1px solid rgba(255,255,255,0.1)",
           flexShrink: 0,
         }}
       >
@@ -210,8 +228,8 @@ export default function TypingSimulation({
         >
           <span style={{ fontSize: 28, color: "#fff" }}>👩</span>
         </div>
-        <span style={{ color: "#fff", fontSize: 24, fontWeight: 600 }}>
-          iMessage
+        <span style={{ color: s.headerText, fontSize: 24, fontWeight: 600 }}>
+          {s.label}
         </span>
       </div>
 
@@ -227,42 +245,46 @@ export default function TypingSimulation({
         }}
       >
         {sentMessages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
+          <MessageBubble key={i} msg={msg} style={s} />
         ))}
-        {showTypingIndicator && <TypingIndicator />}
-        {typingText && (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <div
-              style={{
-                maxWidth: "75%",
-                padding: "18px 28px",
-                borderRadius: 32,
-                borderBottomRightRadius: 8,
-                background: "#0B84FE",
-                color: "#fff",
-                fontSize: 34,
-                fontWeight: 400,
-                lineHeight: 1.35,
-                opacity: 0.7,
-              }}
-            >
-              {typingText}
-              <span
-                style={{
-                  display: "inline-block",
-                  width: 3,
-                  height: 32,
-                  background: "#fff",
-                  marginLeft: 2,
-                  verticalAlign: "middle",
-                  animation: "blink 0.8s step-end infinite",
-                }}
-              />
-            </div>
-          </div>
-        )}
+        {showTypingIndicator && <TypingIndicator womanBubble={s.womanBubble} />}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Hook text overlay — stays on screen the entire time */}
+      {hookText && (
+        <div
+          style={{
+            position: "absolute",
+            top: 480,
+            left: 80,
+            right: 80,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+            zIndex: 10,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 68,
+              fontWeight: 800,
+              color: "#fff",
+              textAlign: "center",
+              lineHeight: 1.15,
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+              WebkitTextStroke: "2px #000",
+              paintOrder: "stroke fill",
+              textShadow:
+                "0 3px 20px rgba(0,0,0,0.9), 0 1px 6px rgba(0,0,0,0.95)",
+            }}
+          >
+            {hookText}
+          </div>
+        </div>
+      )}
 
       {/* Text input bar */}
       <div
@@ -272,7 +294,7 @@ export default function TypingSimulation({
           alignItems: "center",
           padding: "0 24px",
           gap: 16,
-          borderTop: "1px solid #1C1C1E",
+          borderTop: "1px solid rgba(255,255,255,0.1)",
           flexShrink: 0,
         }}
       >
@@ -302,16 +324,30 @@ export default function TypingSimulation({
             padding: "0 20px",
             color: typingText ? "#fff" : "#8E8E93",
             fontSize: 30,
+            overflow: "hidden",
           }}
         >
-          {typingText || "iMessage"}
+          {typingText || s.label}
+          {typingText && (
+            <span
+              style={{
+                display: "inline-block",
+                width: 2,
+                height: 28,
+                background: "#fff",
+                marginLeft: 1,
+                flexShrink: 0,
+                animation: "blink 0.8s step-end infinite",
+              }}
+            />
+          )}
         </div>
         <div
           style={{
             width: 48,
             height: 48,
             borderRadius: 24,
-            background: typingText ? "#0B84FE" : "#3A3A3C",
+            background: typingText ? s.accent : "#3A3A3C",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -323,7 +359,7 @@ export default function TypingSimulation({
       </div>
 
       {/* Keyboard */}
-      <Keyboard activeKey={activeKey} />
+      <Keyboard activeKey={activeKey} accent={s.accent} />
 
       <style>{`
         @keyframes blink {
@@ -338,7 +374,13 @@ export default function TypingSimulation({
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  style: s,
+}: {
+  msg: ChatMessage;
+  style: PlatformStyle;
+}) {
   const isMan = msg.sender === "man";
   return (
     <div
@@ -354,8 +396,8 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
           borderRadius: 32,
           borderBottomRightRadius: isMan ? 8 : 32,
           borderBottomLeftRadius: isMan ? 32 : 8,
-          background: isMan ? "#0B84FE" : "#26252A",
-          color: "#fff",
+          background: isMan ? s.manBubble : s.womanBubble,
+          color: isMan ? s.manText : s.womanText,
           fontSize: 34,
           fontWeight: 400,
           lineHeight: 1.35,
@@ -367,7 +409,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
-function TypingIndicator() {
+function TypingIndicator({ womanBubble }: { womanBubble: string }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-start" }}>
       <div
@@ -375,7 +417,7 @@ function TypingIndicator() {
           padding: "18px 24px",
           borderRadius: 32,
           borderBottomLeftRadius: 8,
-          background: "#26252A",
+          background: womanBubble,
           display: "flex",
           gap: 8,
           alignItems: "center",
@@ -398,7 +440,13 @@ function TypingIndicator() {
   );
 }
 
-function Keyboard({ activeKey }: { activeKey: string | null }) {
+function Keyboard({
+  activeKey,
+  accent,
+}: {
+  activeKey: string | null;
+  accent: string;
+}) {
   const keyW = 88;
   const keyH = 82;
   const gap = 10;
@@ -438,6 +486,7 @@ function Keyboard({ activeKey }: { activeKey: string | null }) {
                       height={keyH}
                       isActive={activeKey === " "}
                       isSpecial={false}
+                      accent={accent}
                     />
                   );
                 }
@@ -450,6 +499,7 @@ function Keyboard({ activeKey }: { activeKey: string | null }) {
                       height={keyH}
                       isActive={activeKey === "send"}
                       isSpecial
+                      accent={accent}
                     />
                   );
                 }
@@ -461,6 +511,7 @@ function Keyboard({ activeKey }: { activeKey: string | null }) {
                     height={keyH}
                     isActive={false}
                     isSpecial
+                    accent={accent}
                   />
                 );
               }
@@ -473,6 +524,7 @@ function Keyboard({ activeKey }: { activeKey: string | null }) {
                   height={keyH}
                   isActive={activeKey === key.toLowerCase()}
                   isSpecial={isShiftOrDelete}
+                  accent={accent}
                 />
               );
             })}
@@ -489,12 +541,14 @@ function Key({
   height,
   isActive,
   isSpecial,
+  accent,
 }: {
   label: string;
   width: number;
   height: number;
   isActive: boolean;
   isSpecial: boolean;
+  accent: string;
 }) {
   return (
     <div
@@ -502,7 +556,7 @@ function Key({
         width,
         height,
         borderRadius: 10,
-        background: isActive ? "#0B84FE" : isSpecial ? "#3A3A3C" : "#4A4A4C",
+        background: isActive ? accent : isSpecial ? "#3A3A3C" : "#4A4A4C",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

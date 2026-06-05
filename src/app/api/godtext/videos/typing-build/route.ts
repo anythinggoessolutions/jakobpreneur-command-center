@@ -90,6 +90,7 @@ type ConversationMsg = {
 
 type Conversation = {
   hookText: string;
+  platform: string;
   messages: ConversationMsg[];
 };
 
@@ -179,6 +180,7 @@ export async function POST(req: NextRequest) {
     const renderUrl = new URL("/godtext-ai/render", baseUrl);
     renderUrl.searchParams.set("type", "typing");
     renderUrl.searchParams.set("messages", JSON.stringify(conversation.messages));
+    renderUrl.searchParams.set("platform", conversation.platform || "iMessage");
     if (conversation.hookText) {
       renderUrl.searchParams.set("hook", conversation.hookText);
     }
@@ -261,7 +263,7 @@ export async function POST(req: NextRequest) {
           "-t", String(videoDur),
           "-filter_complex",
           `[0:v]scale=${FRAME_W}:${FRAME_H}:force_original_aspect_ratio=decrease,pad=${FRAME_W}:${FRAME_H}:(ow-iw)/2:(oh-ih)/2:black,fps=30[v];` +
-          `[1:a]atrim=0:${videoDur},volume=0.20,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music]`,
+          `[1:a]atrim=0:${videoDur},volume=1.0,afade=t=in:d=1,afade=t=out:st=${fadeOutStart}:d=2[music]`,
           "-map", "[v]",
           "-map", "[music]",
           "-c:v", "libx264", "-pix_fmt", "yuv420p",

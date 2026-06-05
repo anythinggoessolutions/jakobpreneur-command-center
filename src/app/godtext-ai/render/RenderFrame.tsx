@@ -107,10 +107,12 @@ export default function RenderFrame() {
       msgs = JSON.parse(params.get("messages") || "[]");
     } catch { /* ignore */ }
     const hook = params.get("hook") || undefined;
+    const plat = params.get("platform") || "iMessage";
     return (
       <TypingSimulation
         messages={msgs}
         hookText={hook}
+        platform={plat}
         autoStart
       />
     );
