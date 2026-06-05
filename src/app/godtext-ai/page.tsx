@@ -41,7 +41,7 @@ export default function GodTextAIPage() {
     videoUrl?: string;
   } | null>(null);
   const [videoTheme, setVideoTheme] = useState<"dark" | "white">("dark");
-  const [buildFormat, setBuildFormat] = useState<"video" | "carousel">("video");
+  const [buildFormat, setBuildFormat] = useState<"video" | "carousel" | "typing">("video");
   const [carouselResult, setCarouselResult] = useState<{
     slideUrls: string[];
   } | null>(null);
@@ -195,6 +195,26 @@ export default function GodTextAIPage() {
         setCarouselResult({
           slideUrls: data.slideUrls || [],
         });
+      } else if (buildFormat === "typing") {
+        const buildUrl = isLocal
+          ? "/api/godtext/videos/typing-build"
+          : "http://localhost:3000/api/godtext/videos/typing-build";
+
+        const res = await fetch(buildUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation }),
+          signal: AbortSignal.timeout(300000),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+        setVideoResult({
+          outputPath: "",
+          durationSeconds: 0,
+          frameCount: 0,
+          videoUrl: data.videoUrl,
+        });
       } else {
         const buildUrl = isLocal
           ? "/api/godtext/videos/build"
@@ -204,7 +224,6 @@ export default function GodTextAIPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ conversation, theme: videoTheme }),
-          // Video builds with commentary TTS can take 2-3 minutes
           signal: AbortSignal.timeout(300000),
         });
         const data = await res.json();
@@ -639,11 +658,13 @@ export default function GodTextAIPage() {
             <div className="flex items-start justify-between mb-3">
               <div>
                 <h2 className="text-sm font-bold text-zinc-900">
-                  Build {buildFormat === "carousel" ? "Carousel" : "Video"}
+                  Build {buildFormat === "carousel" ? "Carousel" : buildFormat === "typing" ? "Typing Video" : "Video"}
                 </h2>
                 <p className="text-xs text-zinc-500 mt-0.5">
                   {buildFormat === "carousel"
                     ? "Generate carousel slides from the selected script. Posts to TikTok."
+                    : buildFormat === "typing"
+                    ? "iMessage typing simulation — keys light up as messages are typed. Posts to all platforms."
                     : "Assemble a 1080x1920 MP4 from the selected script. Posts to all platforms."}
                 </p>
               </div>
@@ -651,7 +672,7 @@ export default function GodTextAIPage() {
                 <select
                   value={buildFormat}
                   onChange={(e) => {
-                    setBuildFormat(e.target.value as "video" | "carousel");
+                    setBuildFormat(e.target.value as "video" | "carousel" | "typing");
                     setVideoResult(null);
                     setCarouselResult(null);
                     setAssembleError(null);
@@ -660,6 +681,7 @@ export default function GodTextAIPage() {
                   className="rounded border border-zinc-200 bg-white text-xs px-2 py-2 disabled:opacity-40"
                 >
                   <option value="video">Video</option>
+                  <option value="typing">Typing Video</option>
                   <option value="carousel">Carousel</option>
                 </select>
                 <select
@@ -680,7 +702,9 @@ export default function GodTextAIPage() {
                     ? "Building…"
                     : buildFormat === "carousel"
                       ? "Build Carousel"
-                      : "Build Video"}
+                      : buildFormat === "typing"
+                        ? "Build Typing Video"
+                        : "Build Video"}
                 </button>
               </div>
             </div>
@@ -689,6 +713,8 @@ export default function GodTextAIPage() {
               <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
                 {buildFormat === "carousel"
                   ? "Building carousel — screenshotting slides, uploading images. This takes 1-2 minutes. Don’t close this tab."
+                  : buildFormat === "typing"
+                  ? "Recording typing simulation — Playwright is capturing the animation. This takes 1-2 minutes. Don’t close this tab."
                   : "Building video — screenshotting frames, encoding MP4, uploading. This takes 1-2 minutes. Don’t close this tab."}
               </div>
             )}

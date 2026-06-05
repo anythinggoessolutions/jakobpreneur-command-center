@@ -23,6 +23,7 @@ import GodTextPhoneMockup, {
 } from "@/components/GodTextPhoneMockup";
 import GodTextCookingWhite from "@/components/GodTextCookingWhite";
 import GodTextCookingDark from "@/components/GodTextCookingDark";
+import TypingSimulation from "@/components/TypingSimulation";
 
 // Keep PHONE_SCALE for cooking frames (they're centered and OK)
 const PHONE_SCALE = 2.25;
@@ -99,6 +100,21 @@ const PLATFORM_STYLES: Record<
 export default function RenderFrame() {
   const params = useSearchParams();
   const type = params.get("type") || "phone";
+
+  if (type === "typing") {
+    let msgs: ChatMessage[] = [];
+    try {
+      msgs = JSON.parse(params.get("messages") || "[]");
+    } catch { /* ignore */ }
+    const hook = params.get("hook") || undefined;
+    return (
+      <TypingSimulation
+        messages={msgs}
+        hookText={hook}
+        autoStart
+      />
+    );
+  }
 
   if (type === "hook") {
     return <HookFrame hookText={params.get("hook") || ""} />;
