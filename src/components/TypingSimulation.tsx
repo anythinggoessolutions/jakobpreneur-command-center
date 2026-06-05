@@ -248,7 +248,7 @@ export default function TypingSimulation({
         </span>
       </div>
 
-      {/* Messages area */}
+      {/* Messages area — justify to bottom so messages start near keyboard and push up */}
       <div
         style={{
           flex: 1,
@@ -256,6 +256,7 @@ export default function TypingSimulation({
           padding: "20px 32px",
           display: "flex",
           flexDirection: "column",
+          justifyContent: "flex-end",
           gap: 16,
         }}
       >
@@ -266,12 +267,13 @@ export default function TypingSimulation({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Hook text overlay — bottom of safe zone, above keyboard */}
+      {/* Hook text overlay — centered in safe zone */}
       {hookText && (
         <div
           style={{
             position: "absolute",
-            bottom: 520,
+            top: 250,
+            bottom: 1920 - 1520,
             left: 80,
             right: 80,
             display: "flex",
