@@ -1365,6 +1365,7 @@ type RebrandResult = {
   outputUrl?: string;
   frameRange?: { start: number; end: number };
   error?: string;
+  debug?: string;
 };
 
 function VideoRebrandSection() {
@@ -1511,6 +1512,11 @@ function VideoRebrandSection() {
                     <div className="text-amber-700 mt-1">
                       No competitor app frame detected — video downloaded but
                       not modified
+                      {r.debug && (
+                        <div className="text-[10px] text-amber-500 mt-0.5 font-mono">
+                          {r.debug}
+                        </div>
+                      )}
                     </div>
                   )}
                   {r.status === "error" && (

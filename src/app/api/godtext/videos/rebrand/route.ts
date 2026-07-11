@@ -179,7 +179,7 @@ async function downloadTikTokNoWatermark(
 async function detectCompetitorFrames(
   videoPath: string,
   jobDir: string,
-): Promise<{ start: number; end: number } | null> {
+): Promise<{ start: number; end: number; debug: string } | { noMatch: true; debug: string }> {
   const framesDir = path.join(jobDir, "detect-frames");
   await fs.mkdir(framesDir, { recursive: true });
 
@@ -190,7 +190,8 @@ async function detectCompetitorFrames(
     videoPath,
   ]);
   const duration = parseFloat(durationOut.trim());
-  if (isNaN(duration) || duration <= 0) return null;
+  if (isNaN(duration) || duration <= 0)
+    return { noMatch: true as const, debug: "Could not read video duration" };
 
   // Extract frames at 2fps for detection
   await execAsync(FFMPEG, [
@@ -205,12 +206,20 @@ async function detectCompetitorFrames(
     .sort();
 
   // Score each frame
-  const scores: { timestamp: number; match: boolean }[] = [];
+  const scores: { timestamp: number; match: boolean; blueRatio: number; darkRatio: number }[] = [];
   for (let i = 0; i < frameFiles.length; i++) {
     const framePath = path.join(framesDir, frameFiles[i]);
-    const match = await isCompetitorFrame(framePath);
-    scores.push({ timestamp: i * 0.5, match });
+    const result = await isCompetitorFrame(framePath);
+    scores.push({ timestamp: i * 0.5, ...result });
   }
+
+  // Log detection stats for debugging
+  const matchCount = scores.filter((s) => s.match).length;
+  const topBlue = Math.max(...scores.map((s) => s.blueRatio));
+  const topDark = Math.max(...scores.map((s) => s.darkRatio));
+  console.log(
+    `[Detect] ${frameFiles.length} frames, ${matchCount} matched. Peak blue: ${(topBlue * 100).toFixed(1)}%, peak dark: ${(topDark * 100).toFixed(1)}%`,
+  );
 
   // Find the longest consecutive run of matching frames (at least 2 in a row)
   let bestStart = -1;
@@ -234,22 +243,28 @@ async function detectCompetitorFrames(
     }
   }
 
+  const debugInfo = `${frameFiles.length} frames analyzed, ${matchCount} matched (need 2+ consecutive). Peak blue: ${(topBlue * 100).toFixed(1)}%, peak dark: ${(topDark * 100).toFixed(1)}%. Best consecutive run: ${bestLen}`;
+
   // Need at least 2 consecutive matching frames (1 second)
-  if (bestLen < 2) return null;
+  if (bestLen < 2) return { noMatch: true as const, debug: debugInfo };
 
   const rangeSeconds = bestEnd - bestStart;
 
   // If the detected range covers more than 40% of the video, it's a false
   // positive (sky, light clothing, etc.) — skip it
-  if (rangeSeconds / duration > 0.4) return null;
+  if (rangeSeconds / duration > 0.4)
+    return { noMatch: true as const, debug: `${debugInfo}. Rejected: range covers ${(rangeSeconds / duration * 100).toFixed(0)}% of video (>40% = false positive)` };
 
   return {
     start: Math.max(0, bestStart - 0.3),
     end: Math.min(duration, bestEnd + 0.8),
+    debug: debugInfo,
   };
 }
 
-async function isCompetitorFrame(framePath: string): Promise<boolean> {
+async function isCompetitorFrame(
+  framePath: string,
+): Promise<{ match: boolean; blueRatio: number; darkRatio: number }> {
   const { data, info } = await sharp(framePath)
     .raw()
     .toBuffer({ resolveWithObject: true });
@@ -258,20 +273,20 @@ async function isCompetitorFrame(framePath: string): Promise<boolean> {
   let lightBlueCount = 0;
   let darkBoxCount = 0;
 
-  // Sample every 4th pixel for speed
   for (let i = 0; i < data.length; i += info.channels * 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
 
-    // Tight range around the actual Plug AI blue: #B8DFFB
-    // R: 170-200, G: 210-235, B: 240-255
-    if (r >= 170 && r <= 200 && g >= 210 && g <= 235 && b >= 240 && b <= 255) {
+    // Wide range for light blue backgrounds — covers Plug AI, Rizz,
+    // and other competitor apps after TikTok compression shifts colors.
+    // Hue stays in the blue/cyan family: B > G > R, with B dominant.
+    if (r >= 130 && r <= 220 && g >= 180 && g <= 245 && b >= 220 && b <= 255 && b > r + 20) {
       lightBlueCount++;
     }
 
     // Dark chat box area (near-black)
-    if (r < 20 && g < 20 && b < 20) {
+    if (r < 40 && g < 40 && b < 40) {
       darkBoxCount++;
     }
   }
@@ -280,8 +295,8 @@ async function isCompetitorFrame(framePath: string): Promise<boolean> {
   const blueRatio = lightBlueCount / sampledPixels;
   const darkRatio = darkBoxCount / sampledPixels;
 
-  // Need >20% light blue background AND >10% dark area (the chat box)
-  return blueRatio > 0.2 && darkRatio > 0.1;
+  // Need >10% light blue background AND >5% dark area (the chat box)
+  return { match: blueRatio > 0.1 && darkRatio > 0.05, blueRatio, darkRatio };
 }
 
 // ---------------------------------------------------------------------------
@@ -408,6 +423,7 @@ type VideoResult = {
   outputUrl?: string;
   frameRange?: { start: number; end: number };
   error?: string;
+  debug?: string;
 };
 
 async function processVideo(
@@ -427,11 +443,12 @@ async function processVideo(
     const { width, height } = await getVideoDimensions(rawVideoPath);
 
     // 3. Detect competitor frames
-    const frameRange = await detectCompetitorFrames(rawVideoPath, videoDir);
-    if (!frameRange) {
+    const detection = await detectCompetitorFrames(rawVideoPath, videoDir);
+    if ("noMatch" in detection) {
       return {
         originalUrl: tiktokUrl,
         status: "no_competitor_frame",
+        debug: detection.debug,
       };
     }
 
@@ -443,8 +460,8 @@ async function processVideo(
     await overlayFrame(
       rawVideoPath,
       godtextFramePath,
-      frameRange.start,
-      frameRange.end,
+      detection.start,
+      detection.end,
       outputPath,
       width,
       height,
@@ -458,7 +475,8 @@ async function processVideo(
       originalUrl: tiktokUrl,
       status: "success",
       outputUrl,
-      frameRange,
+      frameRange: { start: detection.start, end: detection.end },
+      debug: detection.debug,
     };
   } catch (err) {
     return {
