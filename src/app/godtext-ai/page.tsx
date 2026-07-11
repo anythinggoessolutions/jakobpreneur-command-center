@@ -10,6 +10,22 @@ import GodTextGeneratingScreen from "@/components/GodTextGeneratingScreen";
 import GodTextCookingWhite from "@/components/GodTextCookingWhite";
 import GodTextCookingDark from "@/components/GodTextCookingDark";
 
+const TIME_SLOTS: { value: string; label: string }[] = [];
+for (let h = 7; h <= 22; h++) {
+  for (let m = 0; m < 60; m += 15) {
+    if (h === 22 && m > 30) break;
+    const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    const hour12 = h > 12 ? h - 12 : h === 0 ? 12 : h;
+    const ampm = h >= 12 ? "PM" : "AM";
+    const label = `${hour12}:${String(m).padStart(2, "0")} ${ampm}`;
+    TIME_SLOTS.push({ value, label });
+  }
+}
+const SLOT_VALUES = TIME_SLOTS.map((s) => s.value);
+const SLOT_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  TIME_SLOTS.map((s) => [s.value, s.label]),
+);
+
 type GeneratedConversation = {
   scenario: string;
   platform: PhonePlatform;
@@ -91,7 +107,6 @@ export default function GodTextAIPage() {
       const data = await res.json();
       const posts = Array.isArray(data.posts) ? data.posts : [];
       const slots: Record<string, boolean> = {};
-      const SLOT_TIMES = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"];
       for (const post of posts) {
         const sf = post.scheduled_for;
         if (!sf) continue;
@@ -105,10 +120,10 @@ export default function GodTextAIPage() {
         const hhmm = hours.replace(/ /g, "").trim();
         const [h, m] = hhmm.split(":").map(Number);
         const totalMins = h * 60 + m;
-        for (const slot of SLOT_TIMES) {
+        for (const slot of SLOT_VALUES) {
           const [sh, sm] = slot.split(":").map(Number);
           const slotMins = sh * 60 + sm;
-          if (Math.abs(totalMins - slotMins) <= 30) {
+          if (Math.abs(totalMins - slotMins) <= 7) {
             slots[`${dateStr}|${slot}`] = true;
             break;
           }
@@ -250,20 +265,6 @@ export default function GodTextAIPage() {
     }
   };
 
-  const SLOT_LABELS: Record<string, string> = {
-    "07:00": "7:00 AM — Early morning",
-    "08:30": "8:30 AM — Morning commute",
-    "10:00": "10:00 AM — Mid-morning",
-    "11:30": "11:30 AM — Lunch break",
-    "13:00": "1:00 PM — Early afternoon",
-    "14:30": "2:30 PM — Afternoon peak",
-    "16:00": "4:00 PM — Afternoon scroll",
-    "18:00": "6:00 PM — Post-work",
-    "19:30": "7:30 PM — Evening prime",
-    "21:00": "9:00 PM — Night scroll",
-    "22:30": "10:30 PM — Late night",
-  };
-
   const runSchedule = async () => {
     if (!videoResult?.videoUrl) return;
     setScheduling(true);
@@ -287,7 +288,7 @@ export default function GodTextAIPage() {
       setScheduleResult({
         postId: data.postId,
         status: data.status,
-        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABEL_MAP[scheduleSlot] || scheduleSlot}`,
       });
       // Refresh booked slots so the UI immediately reflects the new booking
       fetchBookedSlots();
@@ -753,8 +754,7 @@ export default function GodTextAIPage() {
                     onChange={(e) => {
                       const newDate = e.target.value;
                       setScheduleDate(newDate);
-                      const slots = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"];
-                      const firstOpen = slots.find((s) => !bookedSlots[`${newDate}|${s}`]);
+                      const firstOpen = SLOT_VALUES.find((s) => !bookedSlots[`${newDate}|${s}`]);
                       if (firstOpen) setScheduleSlot(firstOpen);
                     }}
                     disabled={scheduling}
@@ -769,9 +769,10 @@ export default function GodTextAIPage() {
                         month: "short",
                         day: "numeric",
                       });
-                      const slotsTotal = 11;
-                      const slotsBooked = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"]
-                        .filter((s) => bookedSlots[`${val}|${s}`]).length;
+                      const slotsTotal = SLOT_VALUES.length;
+                      const slotsBooked = SLOT_VALUES.filter(
+                        (s) => bookedSlots[`${val}|${s}`],
+                      ).length;
                       const slotsOpen = slotsTotal - slotsBooked;
                       return (
                         <option key={val} value={val}>
@@ -786,19 +787,7 @@ export default function GodTextAIPage() {
                     disabled={scheduling}
                     className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
                   >
-                    {[
-                      { value: "07:00", label: "7:00 AM — Early morning" },
-                      { value: "08:30", label: "8:30 AM — Morning commute" },
-                      { value: "10:00", label: "10:00 AM — Mid-morning" },
-                      { value: "11:30", label: "11:30 AM — Lunch break" },
-                      { value: "13:00", label: "1:00 PM — Early afternoon" },
-                      { value: "14:30", label: "2:30 PM — Afternoon peak" },
-                      { value: "16:00", label: "4:00 PM — Afternoon scroll" },
-                      { value: "18:00", label: "6:00 PM — Post-work" },
-                      { value: "19:30", label: "7:30 PM — Evening prime" },
-                      { value: "21:00", label: "9:00 PM — Night scroll" },
-                      { value: "22:30", label: "10:30 PM — Late night" },
-                    ].map((slot) => {
+                    {TIME_SLOTS.map((slot) => {
                       const isBooked = bookedSlots[`${scheduleDate}|${slot.value}`];
                       return (
                         <option
@@ -833,7 +822,7 @@ export default function GodTextAIPage() {
                         setScheduleResult({
                           postId: data.postId,
                           status: data.status,
-                          scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+                          scheduledFor: `${scheduleDate} at ${SLOT_LABEL_MAP[scheduleSlot] || scheduleSlot}`,
                         });
                         fetchBookedSlots();
                       } catch (err) {
@@ -890,8 +879,7 @@ export default function GodTextAIPage() {
                           const newDate = e.target.value;
                           setScheduleDate(newDate);
                           // Auto-select the first available slot for this date
-                          const slots = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"];
-                          const firstOpen = slots.find((s) => !bookedSlots[`${newDate}|${s}`]);
+                          const firstOpen = SLOT_VALUES.find((s) => !bookedSlots[`${newDate}|${s}`]);
                           if (firstOpen) setScheduleSlot(firstOpen);
                         }}
                         disabled={scheduling}
@@ -906,9 +894,10 @@ export default function GodTextAIPage() {
                             month: "short",
                             day: "numeric",
                           });
-                          const slotsTotal = 11;
-                          const slotsBooked = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"]
-                            .filter((s) => bookedSlots[`${val}|${s}`]).length;
+                          const slotsTotal = SLOT_VALUES.length;
+                          const slotsBooked = SLOT_VALUES.filter(
+                            (s) => bookedSlots[`${val}|${s}`],
+                          ).length;
                           const slotsOpen = slotsTotal - slotsBooked;
                           return (
                             <option key={val} value={val}>
@@ -923,19 +912,7 @@ export default function GodTextAIPage() {
                         disabled={scheduling}
                         className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
                       >
-                        {[
-                          { value: "07:00", label: "7:00 AM — Early morning" },
-                          { value: "08:30", label: "8:30 AM — Morning commute" },
-                          { value: "10:00", label: "10:00 AM — Mid-morning" },
-                          { value: "11:30", label: "11:30 AM — Lunch break" },
-                          { value: "13:00", label: "1:00 PM — Early afternoon" },
-                          { value: "14:30", label: "2:30 PM — Afternoon peak" },
-                          { value: "16:00", label: "4:00 PM — Afternoon scroll" },
-                          { value: "18:00", label: "6:00 PM — Post-work" },
-                          { value: "19:30", label: "7:30 PM — Evening prime" },
-                          { value: "21:00", label: "9:00 PM — Night scroll" },
-                          { value: "22:30", label: "10:30 PM — Late night" },
-                        ].map((slot) => {
+                        {TIME_SLOTS.map((slot) => {
                           const isBooked = bookedSlots[`${scheduleDate}|${slot.value}`];
                           return (
                             <option
@@ -1028,20 +1005,6 @@ function ThirstTrapSection({
   });
   const [scheduleSlot, setScheduleSlot] = useState("07:00");
 
-  const SLOT_LABELS: Record<string, string> = {
-    "07:00": "7:00 AM — Early morning",
-    "08:30": "8:30 AM — Morning commute",
-    "10:00": "10:00 AM — Mid-morning",
-    "11:30": "11:30 AM — Lunch break",
-    "13:00": "1:00 PM — Early afternoon",
-    "14:30": "2:30 PM — Afternoon peak",
-    "16:00": "4:00 PM — Afternoon scroll",
-    "18:00": "6:00 PM — Post-work",
-    "19:30": "7:30 PM — Evening prime",
-    "21:00": "9:00 PM — Night scroll",
-    "22:30": "10:30 PM — Late night",
-  };
-
   const runBuild = async () => {
     setBuilding(true);
     setError(null);
@@ -1103,7 +1066,7 @@ function ThirstTrapSection({
       setScheduleResult({
         postId: data.postId,
         status: data.status,
-        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABEL_MAP[scheduleSlot] || scheduleSlot}`,
       });
       fetchBookedSlots();
     } catch (err) {
@@ -1176,8 +1139,7 @@ function ThirstTrapSection({
               onChange={(e) => {
                 const newDate = e.target.value;
                 setScheduleDate(newDate);
-                const slots = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"];
-                const firstOpen = slots.find(
+                const firstOpen = SLOT_VALUES.find(
                   (s) => !bookedSlots[`${newDate}|${s}`],
                 );
                 if (firstOpen) setScheduleSlot(firstOpen);
@@ -1194,9 +1156,10 @@ function ThirstTrapSection({
                   month: "short",
                   day: "numeric",
                 });
-                const slotsTotal = 11;
-                const slotsBooked = ["07:00", "08:30", "10:00", "11:30", "13:00", "14:30", "16:00", "18:00", "19:30", "21:00", "22:30"]
-                  .filter((s) => bookedSlots[`${val}|${s}`]).length;
+                const slotsTotal = SLOT_VALUES.length;
+                const slotsBooked = SLOT_VALUES.filter(
+                  (s) => bookedSlots[`${val}|${s}`],
+                ).length;
                 const slotsOpen = slotsTotal - slotsBooked;
                 return (
                   <option key={val} value={val}>
@@ -1214,19 +1177,7 @@ function ThirstTrapSection({
               disabled={scheduling}
               className="rounded border border-green-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
             >
-              {[
-                { value: "07:00", label: "7:00 AM — Early morning" },
-                { value: "08:30", label: "8:30 AM — Morning commute" },
-                { value: "10:00", label: "10:00 AM — Mid-morning" },
-                { value: "11:30", label: "11:30 AM — Lunch break" },
-                { value: "13:00", label: "1:00 PM — Early afternoon" },
-                { value: "14:30", label: "2:30 PM — Afternoon peak" },
-                { value: "16:00", label: "4:00 PM — Afternoon scroll" },
-                { value: "18:00", label: "6:00 PM — Post-work" },
-                { value: "19:30", label: "7:30 PM — Evening prime" },
-                { value: "21:00", label: "9:00 PM — Night scroll" },
-                { value: "22:30", label: "10:30 PM — Late night" },
-              ].map((slot) => {
+              {TIME_SLOTS.map((slot) => {
                 const isBooked =
                   bookedSlots[`${scheduleDate}|${slot.value}`];
                 return (
@@ -1627,47 +1578,7 @@ function VideoUploadSection({
     const d = new Date();
     return d.toISOString().split("T")[0];
   });
-  const [scheduleSlot, setScheduleSlot] = useState(() => {
-    const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    const slots = [
-      "07:00", "08:30", "10:00", "11:30", "13:00",
-      "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
-    ];
-    return slots.find((s) => {
-      const [h, m] = s.split(":").map(Number);
-      return h * 60 + m > nowMin;
-    }) || slots[slots.length - 1];
-  });
-
-  const SLOT_LABELS: Record<string, string> = {
-    "07:00": "7:00 AM — Early morning",
-    "08:30": "8:30 AM — Morning commute",
-    "10:00": "10:00 AM — Mid-morning",
-    "11:30": "11:30 AM — Lunch break",
-    "13:00": "1:00 PM — Early afternoon",
-    "14:30": "2:30 PM — Afternoon peak",
-    "16:00": "4:00 PM — Afternoon scroll",
-    "18:00": "6:00 PM — Post-work",
-    "19:30": "7:30 PM — Evening prime",
-    "21:00": "9:00 PM — Night scroll",
-    "22:30": "10:30 PM — Late night",
-  };
-
-  const ALL_SLOTS = [
-    "07:00", "08:30", "10:00", "11:30", "13:00",
-    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
-  ];
-
-  const isSlotPast = (date: string, slot: string) => {
-    const today = new Date().toISOString().split("T")[0];
-    if (date !== today) return false;
-    const [h, m] = slot.split(":").map(Number);
-    const now = new Date();
-    const slotMinutes = h * 60 + m;
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    return slotMinutes <= nowMinutes;
-  };
+  const [scheduleSlot, setScheduleSlot] = useState("07:00");
 
   const handleFile = (f: File) => {
     if (!f.type.startsWith("video/")) return;
@@ -1713,7 +1624,7 @@ function VideoUploadSection({
       setScheduleResult({
         postId: data.postId,
         status: data.status,
-        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABEL_MAP[scheduleSlot] || scheduleSlot}`,
       });
       fetchBookedSlots();
     } catch (err) {
@@ -1848,8 +1759,8 @@ function VideoUploadSection({
                 onChange={(e) => {
                   const newDate = e.target.value;
                   setScheduleDate(newDate);
-                  const firstOpen = ALL_SLOTS.find(
-                    (s) => !bookedSlots[`${newDate}|${s}`] && !isSlotPast(newDate, s),
+                  const firstOpen = SLOT_VALUES.find(
+                    (s) => !bookedSlots[`${newDate}|${s}`],
                   );
                   if (firstOpen) setScheduleSlot(firstOpen);
                 }}
@@ -1865,11 +1776,10 @@ function VideoUploadSection({
                     month: "short",
                     day: "numeric",
                   });
-                  const slotsTotal = 11;
-                  const slotsBooked = [
-                    "07:00", "08:30", "10:00", "11:30", "13:00",
-                    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
-                  ].filter((s) => bookedSlots[`${val}|${s}`]).length;
+                  const slotsTotal = SLOT_VALUES.length;
+                  const slotsBooked = SLOT_VALUES.filter(
+                    (s) => bookedSlots[`${val}|${s}`],
+                  ).length;
                   const slotsOpen = slotsTotal - slotsBooked;
                   return (
                     <option key={val} value={val}>
@@ -1887,30 +1797,17 @@ function VideoUploadSection({
                 disabled={scheduling}
                 className="rounded border border-emerald-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
               >
-                {[
-                  { value: "07:00", label: "7:00 AM — Early morning" },
-                  { value: "08:30", label: "8:30 AM — Morning commute" },
-                  { value: "10:00", label: "10:00 AM — Mid-morning" },
-                  { value: "11:30", label: "11:30 AM — Lunch break" },
-                  { value: "13:00", label: "1:00 PM — Early afternoon" },
-                  { value: "14:30", label: "2:30 PM — Afternoon peak" },
-                  { value: "16:00", label: "4:00 PM — Afternoon scroll" },
-                  { value: "18:00", label: "6:00 PM — Post-work" },
-                  { value: "19:30", label: "7:30 PM — Evening prime" },
-                  { value: "21:00", label: "9:00 PM — Night scroll" },
-                  { value: "22:30", label: "10:30 PM — Late night" },
-                ].map((slot) => {
+                {TIME_SLOTS.map((slot) => {
                   const isBooked =
                     bookedSlots[`${scheduleDate}|${slot.value}`];
-                  const isPast = isSlotPast(scheduleDate, slot.value);
                   return (
                     <option
                       key={slot.value}
                       value={slot.value}
-                      disabled={isBooked || isPast}
+                      disabled={isBooked}
                     >
                       {slot.label}
-                      {isBooked ? " ✓ BOOKED" : isPast ? " — PAST" : ""}
+                      {isBooked ? " ✓ BOOKED" : ""}
                     </option>
                   );
                 })}
