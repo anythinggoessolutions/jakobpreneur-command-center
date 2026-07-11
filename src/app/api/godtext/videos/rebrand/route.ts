@@ -61,58 +61,61 @@ async function launchBrowser() {
 // GodText AI frame HTML template
 // ---------------------------------------------------------------------------
 
-const GODTEXT_FRAME_HTML = `<!DOCTYPE html>
+function buildFrameHtml(w: number, h: number): string {
+  const scale = w / 720;
+  const s = (px: number) => Math.round(px * scale);
+  return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  width: 720px; height: 1280px;
+  width: ${w}px; height: ${h}px;
   background: #B8DFFB;
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   overflow: hidden;
 }
 .container {
-  width: 720px; height: 1280px;
+  width: ${w}px; height: ${h}px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
 }
 .header {
-  width: 680px; display: flex; align-items: center;
-  justify-content: space-between; padding: 12px 16px;
+  width: ${s(680)}px; display: flex; align-items: center;
+  justify-content: space-between; padding: ${s(12)}px ${s(16)}px;
 }
-.back-arrow { font-size: 42px; font-weight: 300; color: #E02020; }
+.back-arrow { font-size: ${s(42)}px; font-weight: 300; color: #E02020; }
 .app-name {
-  font-size: 52px; font-weight: 900; font-style: italic;
-  color: #E02020; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+  font-size: ${s(52)}px; font-weight: 900; font-style: italic;
+  color: #E02020; text-shadow: ${s(2)}px ${s(2)}px ${s(4)}px rgba(0,0,0,0.2);
   letter-spacing: -1px;
 }
-.plus { font-size: 42px; font-weight: 300; color: #E02020; }
+.plus { font-size: ${s(42)}px; font-weight: 300; color: #E02020; }
 .chat-box {
-  width: 680px; height: 460px; background: #0a0a0a;
-  border-radius: 24px; padding: 40px 24px;
+  width: ${s(680)}px; height: ${s(460)}px; background: #0a0a0a;
+  border-radius: ${s(24)}px; padding: ${s(40)}px ${s(24)}px;
   display: flex; flex-direction: column;
-  justify-content: center; gap: 20px;
+  justify-content: center; gap: ${s(20)}px;
 }
 .msg-row { display: flex; }
 .msg-row.sent { justify-content: flex-end; }
 .msg-row.received { justify-content: flex-start; }
 .bubble {
-  padding: 14px 24px; border-radius: 22px;
-  font-size: 22px; font-weight: 500; max-width: 80%;
+  padding: ${s(14)}px ${s(24)}px; border-radius: ${s(22)}px;
+  font-size: ${s(22)}px; font-weight: 500; max-width: 80%;
 }
 .bubble.sent { background: #7B4FE0; color: white; }
 .bubble.received { background: #3a3a3c; color: white; }
 .tap-to-copy {
-  color: #7a8a9a; font-size: 20px;
-  margin-top: 14px; text-align: center;
+  color: #7a8a9a; font-size: ${s(20)}px;
+  margin-top: ${s(14)}px; text-align: center;
 }
 .reply-row {
   display: flex; justify-content: flex-end;
-  margin-top: 16px; padding-right: 20px;
+  margin-top: ${s(16)}px; padding-right: ${s(20)}px;
 }
 .reply-bubble {
   background: #1DA1F2; color: white;
-  padding: 16px 28px; border-radius: 22px;
-  font-size: 24px; font-weight: 600;
+  padding: ${s(16)}px ${s(28)}px; border-radius: ${s(22)}px;
+  font-size: ${s(24)}px; font-weight: 600;
 }
 </style></head><body>
 <div class="container">
@@ -135,6 +138,7 @@ body {
   </div>
 </div>
 </body></html>`;
+}
 
 // ---------------------------------------------------------------------------
 // TikTok watermark-free download via tikwm
@@ -179,7 +183,6 @@ async function detectCompetitorFrames(
   const framesDir = path.join(jobDir, "detect-frames");
   await fs.mkdir(framesDir, { recursive: true });
 
-  // Get video duration
   const { stdout: durationOut } = await execAsync(FFPROBE, [
     "-v", "quiet",
     "-show_entries", "format=duration",
@@ -201,26 +204,48 @@ async function detectCompetitorFrames(
     .filter((f) => f.endsWith(".png"))
     .sort();
 
-  let firstMatch = -1;
-  let lastMatch = -1;
-
+  // Score each frame
+  const scores: { timestamp: number; match: boolean }[] = [];
   for (let i = 0; i < frameFiles.length; i++) {
     const framePath = path.join(framesDir, frameFiles[i]);
-    const isCompetitor = await isCompetitorFrame(framePath);
-    const timestamp = i * 0.5; // 2fps = 0.5s per frame
+    const match = await isCompetitorFrame(framePath);
+    scores.push({ timestamp: i * 0.5, match });
+  }
 
-    if (isCompetitor) {
-      if (firstMatch < 0) firstMatch = timestamp;
-      lastMatch = timestamp;
+  // Find the longest consecutive run of matching frames (at least 2 in a row)
+  let bestStart = -1;
+  let bestEnd = -1;
+  let bestLen = 0;
+  let runStart = -1;
+  let runLen = 0;
+
+  for (const s of scores) {
+    if (s.match) {
+      if (runStart < 0) runStart = s.timestamp;
+      runLen++;
+      if (runLen > bestLen) {
+        bestLen = runLen;
+        bestStart = runStart;
+        bestEnd = s.timestamp;
+      }
+    } else {
+      runStart = -1;
+      runLen = 0;
     }
   }
 
-  if (firstMatch < 0) return null;
+  // Need at least 2 consecutive matching frames (1 second)
+  if (bestLen < 2) return null;
 
-  // Add a small buffer to make sure we cover the full frame
+  const rangeSeconds = bestEnd - bestStart;
+
+  // If the detected range covers more than 40% of the video, it's a false
+  // positive (sky, light clothing, etc.) — skip it
+  if (rangeSeconds / duration > 0.4) return null;
+
   return {
-    start: Math.max(0, firstMatch - 0.3),
-    end: Math.min(duration, lastMatch + 0.8),
+    start: Math.max(0, bestStart - 0.3),
+    end: Math.min(duration, bestEnd + 0.8),
   };
 }
 
@@ -231,6 +256,7 @@ async function isCompetitorFrame(framePath: string): Promise<boolean> {
 
   const totalPixels = info.width * info.height;
   let lightBlueCount = 0;
+  let darkBoxCount = 0;
 
   // Sample every 4th pixel for speed
   for (let i = 0; i < data.length; i += info.channels * 4) {
@@ -238,16 +264,24 @@ async function isCompetitorFrame(framePath: string): Promise<boolean> {
     const g = data[i + 1];
     const b = data[i + 2];
 
-    // Light blue background: #B8DFFB range
-    if (r > 150 && r < 220 && g > 200 && g < 245 && b > 230 && b <= 255) {
+    // Tight range around the actual Plug AI blue: #B8DFFB
+    // R: 170-200, G: 210-235, B: 240-255
+    if (r >= 170 && r <= 200 && g >= 210 && g <= 235 && b >= 240 && b <= 255) {
       lightBlueCount++;
+    }
+
+    // Dark chat box area (near-black)
+    if (r < 20 && g < 20 && b < 20) {
+      darkBoxCount++;
     }
   }
 
   const sampledPixels = totalPixels / 4;
-  const ratio = lightBlueCount / sampledPixels;
-  // >5% light blue pixels = competitor app frame
-  return ratio > 0.05;
+  const blueRatio = lightBlueCount / sampledPixels;
+  const darkRatio = darkBoxCount / sampledPixels;
+
+  // Need >20% light blue background AND >10% dark area (the chat box)
+  return blueRatio > 0.2 && darkRatio > 0.1;
 }
 
 // ---------------------------------------------------------------------------
@@ -260,12 +294,13 @@ async function renderGodTextFrame(
   height: number,
 ): Promise<string> {
   const outputPath = path.join(jobDir, "godtext-frame.png");
+  const html = buildFrameHtml(width, height);
 
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
     await page.setViewportSize({ width, height });
-    await page.setContent(GODTEXT_FRAME_HTML, { waitUntil: "networkidle" });
+    await page.setContent(html, { waitUntil: "networkidle" });
     await new Promise((r) => setTimeout(r, 500));
 
     const buffer = await page.screenshot({
