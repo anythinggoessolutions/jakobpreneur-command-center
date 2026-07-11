@@ -985,6 +985,12 @@ export default function GodTextAIPage() {
         {/* --- Section 3.95: Video Rebranding --- */}
         <VideoRebrandSection />
 
+        {/* --- Section 3.97: Upload & Schedule Video --- */}
+        <VideoUploadSection
+          bookedSlots={bookedSlots}
+          fetchBookedSlots={fetchBookedSlots}
+        />
+
         {/* --- Section 4: Content Calendar --- */}
         <ScheduledPostsFeed />
       </div>
@@ -1588,6 +1594,330 @@ function VideoRebrandSection() {
             {results.filter((r) => r.status === "error").length > 0 &&
               ` · ${results.filter((r) => r.status === "error").length} failed`}
           </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Upload & Schedule Video — drop a finished video, upload to blob, schedule
+// ---------------------------------------------------------------------------
+
+function VideoUploadSection({
+  bookedSlots,
+  fetchBookedSlots,
+}: {
+  bookedSlots: Record<string, boolean>;
+  fetchBookedSlots: () => Promise<void>;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [scheduleResult, setScheduleResult] = useState<{
+    postId: string;
+    status: string;
+    scheduledFor: string;
+  } | null>(null);
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const d = new Date();
+    return d.toISOString().split("T")[0];
+  });
+  const [scheduleSlot, setScheduleSlot] = useState("07:00");
+
+  const SLOT_LABELS: Record<string, string> = {
+    "07:00": "7:00 AM — Early morning",
+    "08:30": "8:30 AM — Morning commute",
+    "10:00": "10:00 AM — Mid-morning",
+    "11:30": "11:30 AM — Lunch break",
+    "13:00": "1:00 PM — Early afternoon",
+    "14:30": "2:30 PM — Afternoon peak",
+    "16:00": "4:00 PM — Afternoon scroll",
+    "18:00": "6:00 PM — Post-work",
+    "19:30": "7:30 PM — Evening prime",
+    "21:00": "9:00 PM — Night scroll",
+    "22:30": "10:30 PM — Late night",
+  };
+
+  const handleFile = (f: File) => {
+    if (!f.type.startsWith("video/")) return;
+    setFile(f);
+    setVideoUrl(null);
+    setScheduleResult(null);
+    setUploadError(null);
+    setScheduleError(null);
+    uploadFile(f);
+  };
+
+  const uploadFile = async (f: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`godtext-uploads/${Date.now()}-${f.name}`, f, {
+        access: "public",
+        handleUploadUrl: "/api/godtext/blob/upload",
+      });
+      setVideoUrl(blob.url);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const runSchedule = async () => {
+    if (!videoUrl) return;
+    setScheduling(true);
+    setScheduleError(null);
+    setScheduleResult(null);
+    try {
+      const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
+      const res = await fetch("/api/godtext/post-everywhere/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videoUrl, scheduledFor }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setScheduleResult({
+        postId: data.postId,
+        status: data.status,
+        scheduledFor: `${scheduleDate} at ${SLOT_LABELS[scheduleSlot] || scheduleSlot}`,
+      });
+      fetchBookedSlots();
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setScheduling(false);
+    }
+  };
+
+  const reset = () => {
+    setFile(null);
+    setVideoUrl(null);
+    setUploadError(null);
+    setScheduleError(null);
+    setScheduleResult(null);
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  return (
+    <section className="mb-6 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-teal-50/40 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">
+            Upload & Schedule Video
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Drop any finished video to upload and schedule it to TikTok,
+            Instagram Reels, and YouTube Shorts.
+          </p>
+        </div>
+        {file && !uploading && (
+          <button
+            onClick={reset}
+            className="text-xs text-zinc-400 hover:text-red-500 cursor-pointer"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {!file ? (
+        <div
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            const f = e.dataTransfer.files[0];
+            if (f) handleFile(f);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          className={`rounded-xl border-2 border-dashed transition-colors ${
+            isDragging
+              ? "border-emerald-400 bg-emerald-50"
+              : "border-zinc-300 bg-white/60"
+          }`}
+        >
+          <label className="flex flex-col items-center justify-center py-8 cursor-pointer">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className={`h-8 w-8 mb-2 ${isDragging ? "text-emerald-400" : "text-zinc-300"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+              />
+            </svg>
+            <p className="text-xs font-medium text-zinc-500">
+              {isDragging ? "Drop video here" : "Drag & drop a video or click to browse"}
+            </p>
+            <p className="text-[11px] text-zinc-400 mt-1">MP4, MOV, WebM</p>
+            <input
+              type="file"
+              accept="video/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleFile(f);
+              }}
+              className="hidden"
+            />
+          </label>
+        </div>
+      ) : (
+        <div>
+          {/* File info */}
+          <div className="flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 mb-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold bg-emerald-100 text-emerald-600">
+              VID
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-zinc-900 font-medium truncate">
+                {file.name}
+              </p>
+              <p className="text-[11px] text-zinc-400">
+                {formatSize(file.size)}
+              </p>
+            </div>
+            {uploading && (
+              <span className="text-[11px] text-blue-600 font-medium">
+                Uploading…
+              </span>
+            )}
+            {videoUrl && (
+              <span className="text-[11px] text-green-600 font-medium">
+                Uploaded
+              </span>
+            )}
+          </div>
+
+          {uploadError && (
+            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+              Upload failed: {uploadError}
+            </div>
+          )}
+
+          {/* Schedule controls */}
+          {videoUrl && !scheduleResult && (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={scheduleDate}
+                onChange={(e) => {
+                  const newDate = e.target.value;
+                  setScheduleDate(newDate);
+                  const slots = [
+                    "07:00", "08:30", "10:00", "11:30", "13:00",
+                    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
+                  ];
+                  const firstOpen = slots.find(
+                    (s) => !bookedSlots[`${newDate}|${s}`],
+                  );
+                  if (firstOpen) setScheduleSlot(firstOpen);
+                }}
+                disabled={scheduling}
+                className="rounded border border-emerald-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+              >
+                {Array.from({ length: 14 }, (_, i) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() + i);
+                  const val = d.toISOString().split("T")[0];
+                  const label = d.toLocaleDateString("en-US", {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  });
+                  const slotsTotal = 11;
+                  const slotsBooked = [
+                    "07:00", "08:30", "10:00", "11:30", "13:00",
+                    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
+                  ].filter((s) => bookedSlots[`${val}|${s}`]).length;
+                  const slotsOpen = slotsTotal - slotsBooked;
+                  return (
+                    <option key={val} value={val}>
+                      {label}
+                      {slotsBooked > 0
+                        ? ` (${slotsOpen}/${slotsTotal} open)`
+                        : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <select
+                value={scheduleSlot}
+                onChange={(e) => setScheduleSlot(e.target.value)}
+                disabled={scheduling}
+                className="rounded border border-emerald-300 bg-white text-xs px-2 py-1.5 disabled:opacity-40"
+              >
+                {[
+                  { value: "07:00", label: "7:00 AM — Early morning" },
+                  { value: "08:30", label: "8:30 AM — Morning commute" },
+                  { value: "10:00", label: "10:00 AM — Mid-morning" },
+                  { value: "11:30", label: "11:30 AM — Lunch break" },
+                  { value: "13:00", label: "1:00 PM — Early afternoon" },
+                  { value: "14:30", label: "2:30 PM — Afternoon peak" },
+                  { value: "16:00", label: "4:00 PM — Afternoon scroll" },
+                  { value: "18:00", label: "6:00 PM — Post-work" },
+                  { value: "19:30", label: "7:30 PM — Evening prime" },
+                  { value: "21:00", label: "9:00 PM — Night scroll" },
+                  { value: "22:30", label: "10:30 PM — Late night" },
+                ].map((slot) => {
+                  const isBooked =
+                    bookedSlots[`${scheduleDate}|${slot.value}`];
+                  return (
+                    <option
+                      key={slot.value}
+                      value={slot.value}
+                      disabled={isBooked}
+                    >
+                      {slot.label}
+                      {isBooked ? " ✓ BOOKED" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+              <button
+                onClick={runSchedule}
+                disabled={scheduling}
+                className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-semibold px-4 py-1.5 rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-colors disabled:opacity-40 cursor-pointer whitespace-nowrap"
+              >
+                {scheduling ? "Scheduling…" : "Schedule to Socials"}
+              </button>
+            </div>
+          )}
+
+          {scheduleError && (
+            <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+              {scheduleError}
+            </div>
+          )}
+
+          {scheduleResult && (
+            <div className="mt-2 text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-2 py-1.5">
+              Scheduled! Post ID:{" "}
+              <code className="bg-emerald-100 px-1 rounded">
+                {scheduleResult.postId}
+              </code>{" "}
+              — {scheduleResult.scheduledFor} (ET) to TikTok, Instagram Reels,
+              YouTube Shorts
+            </div>
+          )}
         </div>
       )}
     </section>
