@@ -982,6 +982,9 @@ export default function GodTextAIPage() {
           fetchBookedSlots={fetchBookedSlots}
         />
 
+        {/* --- Section 3.95: Video Rebranding --- */}
+        <VideoRebrandSection />
+
         {/* --- Section 4: Content Calendar --- */}
         <ScheduledPostsFeed />
       </div>
@@ -1397,6 +1400,197 @@ function ReplyPreview({
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Video Rebranding — bulk TikTok video rebranding pipeline
+// ---------------------------------------------------------------------------
+
+type RebrandResult = {
+  originalUrl: string;
+  status: "success" | "no_competitor_frame" | "error";
+  outputUrl?: string;
+  frameRange?: { start: number; end: number };
+  error?: string;
+};
+
+function VideoRebrandSection() {
+  const [urls, setUrls] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<RebrandResult[]>([]);
+  const [progress, setProgress] = useState<string | null>(null);
+
+  const runRebrand = async () => {
+    const urlList = urls
+      .split("\n")
+      .map((u) => u.trim())
+      .filter((u) => u.length > 0);
+
+    if (urlList.length === 0) return;
+
+    setProcessing(true);
+    setError(null);
+    setResults([]);
+    setProgress(
+      `Processing ${urlList.length} video${urlList.length > 1 ? "s" : ""}… This takes 1-3 minutes per video.`,
+    );
+
+    try {
+      const isLocal =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+      const apiUrl = isLocal
+        ? "/api/godtext/videos/rebrand"
+        : "http://localhost:3000/api/godtext/videos/rebrand";
+
+      const res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urls: urlList }),
+        signal: AbortSignal.timeout(600000),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+
+      setResults(data.results || []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        setError(
+          "Can't reach your Mac. Make sure it's on and the Command Center Server is running.",
+        );
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setProcessing(false);
+      setProgress(null);
+    }
+  };
+
+  const urlCount = urls
+    .split("\n")
+    .filter((u) => u.trim().length > 0).length;
+
+  return (
+    <section className="mb-6 rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50/60 to-cyan-50/40 p-4">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <h2 className="text-sm font-bold text-zinc-900">
+            Video Rebranding
+          </h2>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Paste TikTok URLs to download without watermark, detect competitor
+            app frames (Plug AI etc.), and replace them with GodText AI
+            branding. Up to 10 videos per batch.
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <textarea
+          value={urls}
+          onChange={(e) => setUrls(e.target.value)}
+          disabled={processing}
+          placeholder={
+            "Paste TikTok URLs here — one per line\n\nhttps://www.tiktok.com/@user/video/123...\nhttps://www.tiktok.com/@user/video/456..."
+          }
+          rows={5}
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-800 placeholder:text-zinc-400 disabled:opacity-40 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+        />
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-zinc-400">
+            {urlCount > 0
+              ? `${urlCount} URL${urlCount > 1 ? "s" : ""} ready`
+              : "No URLs pasted yet"}
+          </span>
+          <button
+            onClick={runRebrand}
+            disabled={processing || urlCount === 0}
+            className="bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xs font-semibold px-5 py-2 rounded-lg disabled:opacity-40 cursor-pointer whitespace-nowrap"
+          >
+            {processing
+              ? "Processing…"
+              : `Rebrand ${urlCount > 0 ? urlCount : ""} Video${urlCount !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      </div>
+
+      {progress && (
+        <div className="mb-3 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1.5">
+          {progress}
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1.5">
+          {error}
+        </div>
+      )}
+
+      {results.length > 0 && (
+        <div className="space-y-2">
+          {results.map((r, i) => (
+            <div
+              key={i}
+              className={`text-xs rounded-lg border px-3 py-2.5 ${
+                r.status === "success"
+                  ? "bg-green-50 border-green-200"
+                  : r.status === "no_competitor_frame"
+                    ? "bg-amber-50 border-amber-200"
+                    : "bg-red-50 border-red-200"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-zinc-700 truncate">
+                    {r.originalUrl}
+                  </div>
+                  {r.status === "success" && r.frameRange && (
+                    <div className="text-green-700 mt-1">
+                      Competitor frame replaced at{" "}
+                      {r.frameRange.start.toFixed(1)}s —{" "}
+                      {r.frameRange.end.toFixed(1)}s
+                    </div>
+                  )}
+                  {r.status === "no_competitor_frame" && (
+                    <div className="text-amber-700 mt-1">
+                      No competitor app frame detected — video downloaded but
+                      not modified
+                    </div>
+                  )}
+                  {r.status === "error" && (
+                    <div className="text-red-600 mt-1">{r.error}</div>
+                  )}
+                </div>
+                {r.status === "success" && r.outputUrl && (
+                  <a
+                    href={r.outputUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    download
+                    className="shrink-0 bg-green-700 text-white font-semibold px-3 py-1.5 rounded-lg hover:bg-green-800 transition-colors"
+                  >
+                    Download
+                  </a>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <div className="text-[11px] text-zinc-400 pt-1">
+            {results.filter((r) => r.status === "success").length} rebranded
+            {results.filter((r) => r.status === "no_competitor_frame").length >
+              0 &&
+              ` · ${results.filter((r) => r.status === "no_competitor_frame").length} no competitor frame`}
+            {results.filter((r) => r.status === "error").length > 0 &&
+              ` · ${results.filter((r) => r.status === "error").length} failed`}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
