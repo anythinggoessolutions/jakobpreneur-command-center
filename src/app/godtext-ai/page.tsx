@@ -110,12 +110,9 @@ export default function GodTextAIPage() {
       for (const post of posts) {
         const sf = post.scheduled_for;
         if (!sf) continue;
-        // Parse the scheduled_for datetime and extract date + nearest slot.
-        // PE stores Eastern time with a fake Z suffix, so use UTC to read
-        // the raw values without any timezone shift.
         const dt = new Date(sf);
-        const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "UTC" });
-        const hours = dt.toLocaleString("en-US", { timeZone: "UTC", hour: "2-digit", minute: "2-digit", hour12: false });
+        const dateStr = dt.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+        const hours = dt.toLocaleString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
         // Match to the nearest slot time (within 30 min)
         const hhmm = hours.replace(/ /g, "").trim();
         const [h, m] = hhmm.split(":").map(Number);
@@ -271,8 +268,6 @@ export default function GodTextAIPage() {
     setScheduleError(null);
     setScheduleResult(null);
     try {
-      // Pass the Eastern time directly — PE applies the timezone field itself,
-      // so we must NOT convert to UTC (that would double-offset).
       const scheduledFor = `${scheduleDate}T${scheduleSlot}:00`;
 
       const res = await fetch("/api/godtext/post-everywhere/schedule", {
@@ -1933,7 +1928,7 @@ function ScheduledPostsFeed() {
                     ).toLocaleDateString("en-US", {
                       month: "short",
                       day: "numeric",
-                      timeZone: "UTC",
+                      timeZone: "America/New_York",
                     })}
                     <br />
                     {new Date(
@@ -1941,7 +1936,7 @@ function ScheduledPostsFeed() {
                     ).toLocaleTimeString("en-US", {
                       hour: "numeric",
                       minute: "2-digit",
-                      timeZone: "UTC",
+                      timeZone: "America/New_York",
                     })}
                   </div>
                 ) : (

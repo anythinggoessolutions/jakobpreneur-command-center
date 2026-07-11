@@ -289,7 +289,15 @@ export async function schedulePost(opts: {
   };
 
   if (scheduledFor) {
-    body.scheduled_for = scheduledFor;
+    // scheduledFor arrives as Eastern time (e.g. "2026-07-11T17:00:00").
+    // PE compares scheduled_for against UTC, so convert Eastern → UTC.
+    const eastern = new Date(
+      new Date(scheduledFor).toLocaleString("en-US", { timeZone: TIMEZONE }),
+    );
+    const utcMs =
+      new Date(scheduledFor).getTime() +
+      (new Date(scheduledFor).getTime() - eastern.getTime());
+    body.scheduled_for = new Date(utcMs).toISOString();
   }
 
   const res = await fetch(`${PE_BASE}/posts`, {
@@ -315,10 +323,7 @@ export async function schedulePost(opts: {
 
 /**
  * Build Eastern-time datetimes for all 5 daily slots on a given date.
- *
- * Post Everywhere expects `scheduled_for` to be in the timezone specified by
- * the `timezone` field (we always send "America/New_York"). Do NOT convert to
- * UTC — PE applies the timezone offset itself, so converting would double-offset.
+ * schedulePost() converts these to UTC before sending to PE.
  *
  * @param dateStr — YYYY-MM-DD in Eastern time
  */
