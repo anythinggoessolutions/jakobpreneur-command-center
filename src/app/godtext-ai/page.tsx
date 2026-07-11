@@ -1627,7 +1627,18 @@ function VideoUploadSection({
     const d = new Date();
     return d.toISOString().split("T")[0];
   });
-  const [scheduleSlot, setScheduleSlot] = useState("07:00");
+  const [scheduleSlot, setScheduleSlot] = useState(() => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const slots = [
+      "07:00", "08:30", "10:00", "11:30", "13:00",
+      "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
+    ];
+    return slots.find((s) => {
+      const [h, m] = s.split(":").map(Number);
+      return h * 60 + m > nowMin;
+    }) || slots[slots.length - 1];
+  });
 
   const SLOT_LABELS: Record<string, string> = {
     "07:00": "7:00 AM — Early morning",
@@ -1641,6 +1652,21 @@ function VideoUploadSection({
     "19:30": "7:30 PM — Evening prime",
     "21:00": "9:00 PM — Night scroll",
     "22:30": "10:30 PM — Late night",
+  };
+
+  const ALL_SLOTS = [
+    "07:00", "08:30", "10:00", "11:30", "13:00",
+    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
+  ];
+
+  const isSlotPast = (date: string, slot: string) => {
+    const today = new Date().toISOString().split("T")[0];
+    if (date !== today) return false;
+    const [h, m] = slot.split(":").map(Number);
+    const now = new Date();
+    const slotMinutes = h * 60 + m;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return slotMinutes <= nowMinutes;
   };
 
   const handleFile = (f: File) => {
@@ -1822,12 +1848,8 @@ function VideoUploadSection({
                 onChange={(e) => {
                   const newDate = e.target.value;
                   setScheduleDate(newDate);
-                  const slots = [
-                    "07:00", "08:30", "10:00", "11:30", "13:00",
-                    "14:30", "16:00", "18:00", "19:30", "21:00", "22:30",
-                  ];
-                  const firstOpen = slots.find(
-                    (s) => !bookedSlots[`${newDate}|${s}`],
+                  const firstOpen = ALL_SLOTS.find(
+                    (s) => !bookedSlots[`${newDate}|${s}`] && !isSlotPast(newDate, s),
                   );
                   if (firstOpen) setScheduleSlot(firstOpen);
                 }}
@@ -1880,14 +1902,15 @@ function VideoUploadSection({
                 ].map((slot) => {
                   const isBooked =
                     bookedSlots[`${scheduleDate}|${slot.value}`];
+                  const isPast = isSlotPast(scheduleDate, slot.value);
                   return (
                     <option
                       key={slot.value}
                       value={slot.value}
-                      disabled={isBooked}
+                      disabled={isBooked || isPast}
                     >
                       {slot.label}
-                      {isBooked ? " ✓ BOOKED" : ""}
+                      {isBooked ? " ✓ BOOKED" : isPast ? " — PAST" : ""}
                     </option>
                   );
                 })}
